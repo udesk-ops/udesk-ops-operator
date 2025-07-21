@@ -1,0 +1,15 @@
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotification
+metadata:
+  name: example-scalenotification
+  namespace: default
+spec:
+  type: email
+  default: true
+  config:
+    smtpServer: smtp.example.com
+    smtpPort: 587
+    smtpUser: user@example.com
+    smtpPassword: password
+    fromEmail: noreply@example.com
+    toEmail: admin@example.com

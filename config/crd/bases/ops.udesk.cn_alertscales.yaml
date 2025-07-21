@@ -1,0 +1,187 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: alertscales.ops.udesk.cn
+spec:
+  group: ops.udesk.cn
+  names:
+    kind: AlertScale
+    listKind: AlertScaleList
+    plural: alertscales
+    singular: alertscale
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.scaleTarget.name
+      name: Target
+      type: string
+    - jsonPath: .status.scaleStatus.status
+      name: Status
+      type: string
+    - jsonPath: .status.scaleStatus.originReplicas
+      name: Origin-Replicas
+      type: integer
+    - jsonPath: .status.scaleStatus.scaledReplicas
+      name: Scaled-Replicas
+      type: integer
+    - jsonPath: .spec.scaleDuration
+      name: Scaled-Duration
+      type: string
+    - jsonPath: .spec.scaleThreshold
+      name: Threshold
+      type: integer
+    - jsonPath: .spec.scaleNotificationType
+      name: NotificationType
+      type: string
+    - jsonPath: .spec.scaleReason
+      name: Reason
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: AlertScale is the Schema for the alertscales API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AlertScaleSpec defines the desired state of AlertScale.
+            properties:
+              scaleDuration:
+                description: |-
+                  ScaleDuration is the duration for which the scaling should be applied.
+                  where s=seconds, m=minutes, h=hours, d=days, w=weeks
+                pattern: ^(\d+)([smhdw])$
+                type: string
+              scaleNotificationType:
+                description: ScaleNotification defines the notification settings for
+                  scaling alerts.
+                enum:
+                - email
+                - wxworkrobot
+                type: string
+              scaleReason:
+                description: |-
+                  ScaleReason is the reason for scaling, e.g., "High CPU Usage".
+                  where the length must not exceed 1024 characters.
+                maxLength: 1024
+                type: string
+              scaleTarget:
+                description: ScaleTarget is the target resource for scaling.
+                properties:
+                  apiVersion:
+                    description: |-
+                      APIVersion is the API version of the target resource.
+                      where the first part is the group and the second part is the version,
+                      both can contain alphanumeric characters, dots, underscores, and hyphens.
+                    pattern: ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$
+                    type: string
+                  kind:
+                    description: |-
+                      Kind is the kind of the target resource (e.g., Deployment, StatefulSet).
+                      where the first character is uppercase and the rest are alphanumeric
+                    pattern: ^[A-Z][a-zA-Z0-9]*$
+                    type: string
+                  name:
+                    description: |-
+                      Name is the name of the target resource.
+                      where a-z, A-Z, 0-9, and '-' are allowed,
+                      and must start and end with an alphanumeric character.
+                    pattern: ^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace is the namespace of the target resource.
+                      where a-z, 0-9, and '-' are allowed,
+                      and must start and end with a lowercase alphanumeric character.
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              scaleThreshold:
+                description: ScaleThreshold is the threshold for scaling alerts.
+                format: int32
+                maximum: 100
+                minimum: 0
+                type: number
+              scaleTimeout:
+                description: |-
+                  ScaleTimeout is the timeout for the scaling operation.
+                  where s=seconds, m=minutes, h=hours, d=days, w=weeks
+                pattern: ^(\d+)([smhdw])$
+                type: string
+            required:
+            - scaleReason
+            type: object
+          status:
+            description: AlertScaleStatus defines the observed state of AlertScale.
+            properties:
+              scaleStatus:
+                description: ScaleStatus is the status of the scaling operation.
+                properties:
+                  originReplicas:
+                    description: |-
+                      OriginReplicas is the original number of replicas before scaling.
+                      where the value must be a non-negative integer.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  scaleBeginTime:
+                    description: |-
+                      ScaleBeginTime is the time when the scaling operation began.
+                      where the value must be in RFC3339 format.
+                      Example: "2023-10-01T12:00:00Z"
+                    format: date-time
+                    type: string
+                  scaleEndTime:
+                    description: |-
+                      ScaleEndTime is the time when the scaling operation ended.
+                      where the value must be in RFC3339 format.
+                      Example: "2023-10-01T12:00:00Z"
+                    format: date-time
+                    type: string
+                  scaledReplicas:
+                    description: |-
+                      ScaledReplicas is the number of replicas after scaling.
+                      where the value must be a non-negative integer.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  status:
+                    description: |-
+                      Status indicates the current status of the scaling operation.
+                      where the value must be one of the predefined statuses.
+                    enum:
+                    - Pending
+                    - Scaling
+                    - Scaled
+                    - Failed
+                    - Completed
+                    - Archived
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
