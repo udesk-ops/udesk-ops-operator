@@ -5,7 +5,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 )
 
@@ -15,8 +14,12 @@ type PendingHandler struct{}
 func (h *PendingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Pending state", "alertScale", ctx.AlertScale.Name)
 
-	// 解析持续时间
-	duration, err := h.parseDuration(ctx.AlertScale.Spec.ScaleDuration)
+	// 获取当前副本数作为原始副本数
+	originReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -24,9 +27,7 @@ func (h *PendingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	// 更新状态
 	status := &ctx.AlertScale.Status.ScaleStatus
 	status.Status = ScaleStatusScaling
-	status.ScaleBeginTime = metav1.Now()
-	status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Time.Add(duration))
-	status.OriginReplicas = *ctx.Deployment.Spec.Replicas
+	status.OriginReplicas = originReplicas
 
 	if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		ctx.Logger.Error(err, "failed to update status to scaling")
@@ -40,31 +41,50 @@ func (h *PendingHandler) CanTransition(toState string) bool {
 	return toState == ScaleStatusScaling
 }
 
-func (h *PendingHandler) parseDuration(duration string) (time.Duration, error) {
+// ScalingHandler 处理 Scaling 状态
+type ScalingHandler struct{}
+
+func (h *ScalingHandler) parseDuration(duration string) (time.Duration, error) {
 	if duration == "" {
 		duration = "5m"
 	}
 	return time.ParseDuration(duration)
 }
 
-// ScalingHandler 处理 Scaling 状态
-type ScalingHandler struct{}
-
 func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
 
-	// 检查是否需要扩缩容
+	// 使用策略进行扩缩容
 	if err := h.scaleIfNeeded(ctx); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 检查扩缩容是否完成
-	if h.isScalingCompleted(ctx) {
-		ctx.AlertScale.Status.ScaleStatus.Status = ScaleStatusScaled
+	if isCompleted, err := h.isScalingCompleted(ctx); err != nil {
+		return ctrl.Result{}, err
+	} else if isCompleted {
+		// 解析持续时间
+		duration, err := h.parseDuration(ctx.AlertScale.Spec.ScaleDuration)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		// 更新状态
+		status := &ctx.AlertScale.Status.ScaleStatus
+		status.Status = ScaleStatusScaled
+		status.ScaleBeginTime = metav1.Now()
+		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Time.Add(duration))
 	}
 
 	// 更新扩缩容后的副本数
-	ctx.AlertScale.Status.ScaleStatus.ScaledReplicas = ctx.Deployment.Status.AvailableReplicas
+	if availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	); err != nil {
+		ctx.Logger.Error(err, "failed to get available replicas")
+	} else {
+		ctx.AlertScale.Status.ScaleStatus.ScaledReplicas = availableReplicas
+	}
 
 	if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		return ctrl.Result{}, err
@@ -78,19 +98,37 @@ func (h *ScalingHandler) CanTransition(toState string) bool {
 }
 
 func (h *ScalingHandler) scaleIfNeeded(ctx *ScaleContext) error {
-	if ctx.Deployment.Spec.Replicas != nil &&
-		*ctx.Deployment.Spec.Replicas != ctx.AlertScale.Spec.ScaleThreshold {
+	currentReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	)
+	if err != nil {
+		return err
+	}
 
-		patch := client.MergeFrom(ctx.Deployment.DeepCopy())
-		ctx.Deployment.Spec.Replicas = &ctx.AlertScale.Spec.ScaleThreshold
-
-		return ctx.Reconciler.Patch(ctx.Context, ctx.Deployment, patch)
+	if currentReplicas != ctx.AlertScale.Spec.ScaleThreshold {
+		return ctx.ScaleStrategy.Scale(
+			ctx.Context,
+			ctx.Reconciler.Client,
+			&ctx.AlertScale.Spec.ScaleTarget,
+			ctx.AlertScale.Spec.ScaleThreshold,
+		)
 	}
 	return nil
 }
 
-func (h *ScalingHandler) isScalingCompleted(ctx *ScaleContext) bool {
-	return ctx.Deployment.Status.AvailableReplicas == ctx.AlertScale.Spec.ScaleThreshold
+func (h *ScalingHandler) isScalingCompleted(ctx *ScaleContext) (bool, error) {
+	availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return availableReplicas == ctx.AlertScale.Spec.ScaleThreshold, nil
 }
 
 // ScaledHandler 处理 Scaled 状态
@@ -131,9 +169,16 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	status := &ctx.AlertScale.Status.ScaleStatus
 
 	// 检查是否已恢复到原始副本数
-	if ctx.Deployment.Spec.Replicas != nil &&
-		*ctx.Deployment.Spec.Replicas == status.OriginReplicas {
+	currentReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
+	if currentReplicas == status.OriginReplicas {
 		status.Status = ScaleStatusArchived
 		if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 			return ctrl.Result{}, err
@@ -142,7 +187,12 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	}
 
 	// 恢复原始副本数
-	if err := h.restoreOriginalReplicas(ctx); err != nil {
+	if err := ctx.ScaleStrategy.Scale(
+		ctx.Context,
+		ctx.Reconciler.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+		status.OriginReplicas,
+	); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -151,12 +201,6 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 
 func (h *CompletedHandler) CanTransition(toState string) bool {
 	return toState == ScaleStatusArchived
-}
-
-func (h *CompletedHandler) restoreOriginalReplicas(ctx *ScaleContext) error {
-	patch := client.MergeFrom(ctx.Deployment.DeepCopy())
-	ctx.Deployment.Spec.Replicas = &ctx.AlertScale.Status.ScaleStatus.OriginReplicas
-	return ctx.Reconciler.Patch(ctx.Context, ctx.Deployment, patch)
 }
 
 // FailedHandler 处理 Failed 状态
@@ -191,7 +235,7 @@ func (h *DefaultHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 
 	ctx.AlertScale.Status.ScaleStatus = opsv1beta1.ScaleStatus{
 		Status:         ScaleStatusPending,
-		ScaleBeginTime: metav1.Now(),
+		ScaleBeginTime: metav1.Time{},
 		ScaleEndTime:   metav1.Time{},
 		OriginReplicas: 0,
 		ScaledReplicas: 0,

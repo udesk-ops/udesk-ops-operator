@@ -1,17 +1,10 @@
 apiVersion: ops.udesk.cn/v1beta1
 kind: AlertScale
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"ops.udesk.cn/v1beta1","kind":"AlertScale","metadata":{"annotations":{},"name":"example-alertscale","namespace":"default"},"spec":{"scaleDuration":"1m","scaleNotificationType":"email","scaleReason":"High CPU Usage","scaleTarget":{"apiVersion":"apps/v1","kind":"Deployment","name":"example-deployment","namespace":"default"},"scaleThreshold":10,"scaleTimeout":"5m"}}
-  creationTimestamp: "2025-07-16T15:41:20Z"
-  generation: 1
-  name: example-alertscale-7
+  name: example-alertscale-10
   namespace: default
-  resourceVersion: "1037802"
-  uid: c09f462c-252a-4b39-a9fe-7c7d23b30b21
 spec:
-  scaleDuration: 2m
+  scaleDuration: 10m
   scaleNotificationType: email
   scaleReason: High CPU Usage
   scaleTarget:
@@ -19,5 +12,5 @@ spec:
     kind: Deployment
     name: example-deployment
     namespace: default
-  scaleThreshold: 10
+  scaleThreshold: 30
   scaleTimeout: 5m

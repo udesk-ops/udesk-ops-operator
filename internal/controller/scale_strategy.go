@@ -18,25 +18,25 @@ type ScaleStrategy interface {
 // DeploymentStrategy Deployment 扩缩容策略
 type DeploymentStrategy struct{}
 
-func (s *DeploymentStrategy) Scale(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
+func (s *DeploymentStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
 	deployment := &appv1.Deployment{}
 	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
 
-	if err := client.Get(ctx, key, deployment); err != nil {
+	if err := r.Get(ctx, key, deployment); err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(deployment.DeepCopy())
 	deployment.Spec.Replicas = &replicas
 
-	return client.Patch(ctx, deployment, patch)
+	return r.Patch(ctx, deployment, patch)
 }
 
-func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
 	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
 
-	if err := client.Get(ctx, key, deployment); err != nil {
+	if err := r.Get(ctx, key, deployment); err != nil {
 		return 0, err
 	}
 
@@ -47,11 +47,11 @@ func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, client clie
 	return *deployment.Spec.Replicas, nil
 }
 
-func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
 	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
 
-	if err := client.Get(ctx, key, deployment); err != nil {
+	if err := r.Get(ctx, key, deployment); err != nil {
 		return 0, err
 	}
 
@@ -61,4 +61,42 @@ func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, client cl
 // StatefulSetStrategy StatefulSet 扩缩容策略
 type StatefulSetStrategy struct{}
 
-// 实现 StatefulSet 的扩缩容逻辑...
+func (s *StatefulSetStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
+	statefulSet := &appv1.StatefulSet{}
+	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+
+	if err := r.Get(ctx, key, statefulSet); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(statefulSet.DeepCopy())
+	statefulSet.Spec.Replicas = &replicas
+
+	return r.Patch(ctx, statefulSet, patch)
+}
+
+func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+	statefulSet := &appv1.StatefulSet{}
+	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+
+	if err := r.Get(ctx, key, statefulSet); err != nil {
+		return 0, err
+	}
+
+	if statefulSet.Spec.Replicas == nil {
+		return 0, nil
+	}
+
+	return *statefulSet.Spec.Replicas, nil
+}
+
+func (s *StatefulSetStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+	statefulSet := &appv1.StatefulSet{}
+	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+
+	if err := r.Get(ctx, key, statefulSet); err != nil {
+		return 0, err
+	}
+
+	return statefulSet.Status.ReadyReplicas, nil
+}

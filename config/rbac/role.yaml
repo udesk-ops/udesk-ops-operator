@@ -5,21 +5,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  - statefulsets
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ops.udesk.cn
   resources:
   - alerts
-  - alertscales
   - scalenotifications
   verbs:
   - create
@@ -33,7 +21,6 @@ rules:
   - ops.udesk.cn
   resources:
   - alerts/finalizers
-  - alertscales/finalizers
   - scalenotifications/finalizers
   verbs:
   - update
@@ -41,7 +28,6 @@ rules:
   - ops.udesk.cn
   resources:
   - alerts/status
-  - alertscales/status
   - scalenotifications/status
   verbs:
   - get
