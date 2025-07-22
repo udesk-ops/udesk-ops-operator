@@ -1,10 +1,10 @@
 apiVersion: ops.udesk.cn/v1beta1
 kind: AlertScale
 metadata:
-  name: example-alertscale-10
+  name: example-alertscale-12
   namespace: default
 spec:
-  scaleDuration: 10m
+  scaleDuration: 1m
   scaleNotificationType: email
   scaleReason: High CPU Usage
   scaleTarget:

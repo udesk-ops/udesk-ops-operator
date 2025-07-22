@@ -22,7 +22,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"udesk.cn/ops/internal/itf"
+	"udesk.cn/ops/internal/notifications"
 )
 
 // WXWorkRobotNotificationConfig represents the configuration for WeChat Work notifications.
@@ -83,7 +83,7 @@ func (c *EmailNotificationConfig) Validate() error {
 }
 
 // UnmarshalConfig unmarshals the raw JSON config into the appropriate struct.
-func (n *ScaleNotificationSpec) UnmarshalConfig() (itf.ScaleNotificationConfig, error) {
+func (n *ScaleNotificationSpec) UnmarshalConfig() (notifications.ScaleNotificationConfig, error) {
 	switch n.Type {
 	case "email":
 		var emailConfig EmailNotificationConfig

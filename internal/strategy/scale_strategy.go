@@ -1,26 +1,20 @@
-package controller
+package strategy
 
 import (
 	"context"
 
 	appv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 )
-
-// ScaleStrategy 定义扩缩容策略接口
-type ScaleStrategy interface {
-	Scale(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error
-	GetCurrentReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
-	GetAvailableReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
-}
 
 // DeploymentStrategy Deployment 扩缩容策略
 type DeploymentStrategy struct{}
 
 func (s *DeploymentStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
 	deployment := &appv1.Deployment{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, deployment); err != nil {
 		return err
@@ -34,7 +28,7 @@ func (s *DeploymentStrategy) Scale(ctx context.Context, r client.Client, target 
 
 func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, deployment); err != nil {
 		return 0, err
@@ -49,7 +43,7 @@ func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, r client.Cl
 
 func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, deployment); err != nil {
 		return 0, err
@@ -63,7 +57,7 @@ type StatefulSetStrategy struct{}
 
 func (s *StatefulSetStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
 	statefulSet := &appv1.StatefulSet{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, statefulSet); err != nil {
 		return err
@@ -74,10 +68,9 @@ func (s *StatefulSetStrategy) Scale(ctx context.Context, r client.Client, target
 
 	return r.Patch(ctx, statefulSet, patch)
 }
-
 func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	statefulSet := &appv1.StatefulSet{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, statefulSet); err != nil {
 		return 0, err
@@ -89,10 +82,9 @@ func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, r client.C
 
 	return *statefulSet.Spec.Replicas, nil
 }
-
 func (s *StatefulSetStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	statefulSet := &appv1.StatefulSet{}
-	key := client.ObjectKey{Name: target.Name, Namespace: target.Namespace}
+	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
 	if err := r.Get(ctx, key, statefulSet); err != nil {
 		return 0, err

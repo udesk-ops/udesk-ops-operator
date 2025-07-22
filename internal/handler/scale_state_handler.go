@@ -1,4 +1,4 @@
-package controller
+package handler
 
 import (
 	"time"
@@ -6,18 +6,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/types"
 )
 
 // PendingHandler 处理 Pending 状态
 type PendingHandler struct{}
 
-func (h *PendingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Pending state", "alertScale", ctx.AlertScale.Name)
-
 	// 获取当前副本数作为原始副本数
 	originReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	)
 	if err != nil {
@@ -26,10 +26,10 @@ func (h *PendingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 
 	// 更新状态
 	status := &ctx.AlertScale.Status.ScaleStatus
-	status.Status = ScaleStatusScaling
+	status.Status = types.ScaleStatusScaling
 	status.OriginReplicas = originReplicas
 
-	if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		ctx.Logger.Error(err, "failed to update status to scaling")
 		return ctrl.Result{}, err
 	}
@@ -38,7 +38,7 @@ func (h *PendingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 }
 
 func (h *PendingHandler) CanTransition(toState string) bool {
-	return toState == ScaleStatusScaling
+	return toState == types.ScaleStatusScaling
 }
 
 // ScalingHandler 处理 Scaling 状态
@@ -51,7 +51,7 @@ func (h *ScalingHandler) parseDuration(duration string) (time.Duration, error) {
 	return time.ParseDuration(duration)
 }
 
-func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
 
 	// 使用策略进行扩缩容
@@ -70,7 +70,7 @@ func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 		}
 		// 更新状态
 		status := &ctx.AlertScale.Status.ScaleStatus
-		status.Status = ScaleStatusScaled
+		status.Status = types.ScaleStatusScaled
 		status.ScaleBeginTime = metav1.Now()
 		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Time.Add(duration))
 	}
@@ -78,7 +78,7 @@ func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	// 更新扩缩容后的副本数
 	if availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	); err != nil {
 		ctx.Logger.Error(err, "failed to get available replicas")
@@ -86,7 +86,7 @@ func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 		ctx.AlertScale.Status.ScaleStatus.ScaledReplicas = availableReplicas
 	}
 
-	if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -94,13 +94,13 @@ func (h *ScalingHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 }
 
 func (h *ScalingHandler) CanTransition(toState string) bool {
-	return toState == ScaleStatusScaled || toState == ScaleStatusFailed
+	return toState == types.ScaleStatusScaled || toState == types.ScaleStatusFailed
 }
 
-func (h *ScalingHandler) scaleIfNeeded(ctx *ScaleContext) error {
+func (h *ScalingHandler) scaleIfNeeded(ctx *types.ScaleContext) error {
 	currentReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	)
 	if err != nil {
@@ -110,7 +110,7 @@ func (h *ScalingHandler) scaleIfNeeded(ctx *ScaleContext) error {
 	if currentReplicas != ctx.AlertScale.Spec.ScaleThreshold {
 		return ctx.ScaleStrategy.Scale(
 			ctx.Context,
-			ctx.Reconciler.Client,
+			ctx.Client,
 			&ctx.AlertScale.Spec.ScaleTarget,
 			ctx.AlertScale.Spec.ScaleThreshold,
 		)
@@ -118,10 +118,10 @@ func (h *ScalingHandler) scaleIfNeeded(ctx *ScaleContext) error {
 	return nil
 }
 
-func (h *ScalingHandler) isScalingCompleted(ctx *ScaleContext) (bool, error) {
+func (h *ScalingHandler) isScalingCompleted(ctx *types.ScaleContext) (bool, error) {
 	availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	)
 	if err != nil {
@@ -134,15 +134,15 @@ func (h *ScalingHandler) isScalingCompleted(ctx *ScaleContext) (bool, error) {
 // ScaledHandler 处理 Scaled 状态
 type ScaledHandler struct{}
 
-func (h *ScaledHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *ScaledHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Scaled state", "alertScale", ctx.AlertScale.Name)
 
 	status := &ctx.AlertScale.Status.ScaleStatus
 
 	// 检查是否到达结束时间
 	if status.ScaleEndTime.Time.Before(time.Now()) {
-		status.Status = ScaleStatusCompleted
-		if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+		status.Status = types.ScaleStatusCompleted
+		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -157,13 +157,13 @@ func (h *ScaledHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 }
 
 func (h *ScaledHandler) CanTransition(toState string) bool {
-	return toState == ScaleStatusCompleted
+	return toState == types.ScaleStatusCompleted
 }
 
 // CompletedHandler 处理 Completed 状态
 type CompletedHandler struct{}
 
-func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *CompletedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Completed state", "alertScale", ctx.AlertScale.Name)
 
 	status := &ctx.AlertScale.Status.ScaleStatus
@@ -171,7 +171,7 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	// 检查是否已恢复到原始副本数
 	currentReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	)
 	if err != nil {
@@ -179,8 +179,8 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	}
 
 	if currentReplicas == status.OriginReplicas {
-		status.Status = ScaleStatusArchived
-		if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+		status.Status = types.ScaleStatusArchived
+		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -189,7 +189,7 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 	// 恢复原始副本数
 	if err := ctx.ScaleStrategy.Scale(
 		ctx.Context,
-		ctx.Reconciler.Client,
+		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 		status.OriginReplicas,
 	); err != nil {
@@ -200,13 +200,13 @@ func (h *CompletedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 }
 
 func (h *CompletedHandler) CanTransition(toState string) bool {
-	return toState == ScaleStatusArchived
+	return toState == types.ScaleStatusArchived
 }
 
 // FailedHandler 处理 Failed 状态
 type FailedHandler struct{}
 
-func (h *FailedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *FailedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Failed state", "alertScale", ctx.AlertScale.Name)
 	return ctrl.Result{}, nil
 }
@@ -218,7 +218,7 @@ func (h *FailedHandler) CanTransition(toState string) bool {
 // ArchivedHandler 处理 Archived 状态
 type ArchivedHandler struct{}
 
-func (h *ArchivedHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *ArchivedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Handling Archived state", "alertScale", ctx.AlertScale.Name)
 	return ctrl.Result{}, nil
 }
@@ -230,18 +230,18 @@ func (h *ArchivedHandler) CanTransition(toState string) bool {
 // DefaultHandler 处理默认/初始化状态
 type DefaultHandler struct{}
 
-func (h *DefaultHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+func (h *DefaultHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	ctx.Logger.Info("Initializing AlertScale status", "alertScale", ctx.AlertScale.Name)
 
 	ctx.AlertScale.Status.ScaleStatus = opsv1beta1.ScaleStatus{
-		Status:         ScaleStatusPending,
+		Status:         types.ScaleStatusPending,
 		ScaleBeginTime: metav1.Time{},
 		ScaleEndTime:   metav1.Time{},
 		OriginReplicas: 0,
 		ScaledReplicas: 0,
 	}
 
-	if err := ctx.Reconciler.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -249,5 +249,5 @@ func (h *DefaultHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
 }
 
 func (h *DefaultHandler) CanTransition(toState string) bool {
-	return toState == ScaleStatusPending
+	return toState == types.ScaleStatusPending
 }
