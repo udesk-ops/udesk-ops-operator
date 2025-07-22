@@ -11,6 +11,9 @@ spec:
     kind: AlertScale
     listKind: AlertScaleList
     plural: alertscales
+    shortNames:
+    - as
+    - ascale
     singular: alertscale
   scope: Namespaced
   versions:

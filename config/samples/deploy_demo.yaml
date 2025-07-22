@@ -16,6 +16,13 @@ spec:
     spec:
       containers:
       - name: nginx
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
         image: nginx:1.29.0
         imagePullPolicy: IfNotPresent
         ports:

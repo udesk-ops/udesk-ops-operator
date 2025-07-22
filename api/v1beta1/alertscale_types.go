@@ -138,6 +138,7 @@ type AlertScaleStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=as;ascale
 // +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.scaleTarget.name`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.scaleStatus.status`
 // +kubebuilder:printcolumn:name="Origin-Replicas",type=integer,JSONPath=`.status.scaleStatus.originReplicas`
