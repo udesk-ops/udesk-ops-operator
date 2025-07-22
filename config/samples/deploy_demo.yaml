@@ -1,12 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: example-deployment
-  namespace: default
+  name: nginx-deploy
   labels:
     app: nginx
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: nginx
@@ -17,6 +16,86 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:latest
+        image: nginx:1.29.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: html-config
+          mountPath: /usr/share/nginx/html
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                cat > /usr/share/nginx/html/index.html << EOF
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Nginx Pod Info</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+                        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        h1 { color: #333; text-align: center; }
+                        .info { background: #e3f2fd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+                        .label { font-weight: bold; color: #1976d2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>🚀 Nginx Pod Information</h1>
+                        <div class="info">
+                            <div class="label">Pod Name:</div>
+                            <div>$POD_NAME</div>
+                        </div>
+                        <div class="info">
+                            <div class="label">Pod IP:</div>
+                            <div>$POD_IP</div>
+                        </div>
+                        <div class="info">
+                            <div class="label">Node Name:</div>
+                            <div>$NODE_NAME</div>
+                        </div>
+                        <div class="info">
+                            <div class="label">Timestamp:</div>
+                            <div>$(date)</div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                EOF
+      volumes:
+      - name: nginx-config
+        emptyDir: {}
+      - name: html-config
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-deploy-svc
+  labels:
+    app: nginx
+spec:
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+  type: NodePort  # 或者使用 NodePort 便于访问

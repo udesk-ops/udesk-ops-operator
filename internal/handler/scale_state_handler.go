@@ -79,6 +79,18 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Time.Add(duration))
 	}
 
+	// 检查是否超时
+	currentScaleBeginTime := ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime
+	timeoutDuration, err := h.parseDuration(ctx.AlertScale.Spec.ScaleTimeout)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if currentScaleBeginTime.IsZero() || currentScaleBeginTime.Time.Add(timeoutDuration).Before(time.Now()) {
+		status := &ctx.AlertScale.Status.ScaleStatus
+		status.Status = types.ScaleStatusFailed
+		status.ScaleEndTime = metav1.Now()
+	}
+
 	// 更新扩缩容后的副本数
 	if availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
 		ctx.Context,
@@ -215,6 +227,27 @@ type FailedHandler struct{}
 func (h *FailedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 	log.Info("Handling Failed state", "alertScale", ctx.AlertScale.Name)
+	// 如果副本数 和原始副本数不一致，恢复原始副本数
+	availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
+		ctx.Context,
+		ctx.Client,
+		&ctx.AlertScale.Spec.ScaleTarget,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if availableReplicas != ctx.AlertScale.Status.ScaleStatus.OriginReplicas {
+		if err := ctx.ScaleStrategy.Scale(
+			ctx.Context,
+			ctx.Client,
+			&ctx.AlertScale.Spec.ScaleTarget,
+			ctx.AlertScale.Status.ScaleStatus.OriginReplicas,
+		); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -244,7 +277,7 @@ func (h *DefaultHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 
 	ctx.AlertScale.Status.ScaleStatus = opsv1beta1.ScaleStatus{
 		Status:         types.ScaleStatusPending,
-		ScaleBeginTime: metav1.Time{},
+		ScaleBeginTime: metav1.Now(), // 设置开始时间为当前时间，初始化时开始计算scale超时时间
 		ScaleEndTime:   metav1.Time{},
 		OriginReplicas: 0,
 		ScaledReplicas: 0,

@@ -1,7 +1,7 @@
 apiVersion: ops.udesk.cn/v1beta1
 kind: AlertScale
 metadata:
-  name: example-alertscale-12
+  name: example-alertscale-003
   namespace: default
 spec:
   scaleDuration: 1m
@@ -10,7 +10,7 @@ spec:
   scaleTarget:
     apiVersion: apps/v1
     kind: Deployment
-    name: example-deployment
+    name: nginx-deploy
     namespace: default
   scaleThreshold: 30
-  scaleTimeout: 5m
+  scaleTimeout: 10s
