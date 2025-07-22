@@ -1,8 +1,0 @@
-apiVersion: ops.udesk.cn/v1beta1
-kind: Alert
-metadata:
-  name: high-cpu-alert
-  namespace: default
-spec:
-  alertStatus: active
-  description: "This alert is triggered when CPU usage exceeds 80%."

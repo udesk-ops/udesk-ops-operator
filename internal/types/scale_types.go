@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
@@ -22,7 +21,6 @@ type ScaleContext struct {
 	Client        client.Client // 使用接口而不是具体类型
 	Request       ctrl.Request
 	Context       context.Context
-	Logger        logr.Logger
 	ScaleStrategy ScaleStrategy
 }
 
@@ -41,3 +39,8 @@ const (
 	ScaleStatusFailed    = "Failed"
 	ScaleStatusArchived  = "Archived"
 )
+
+type ScaleNotificationClient interface {
+	SendNotification(ctx context.Context, message string) error
+	Validate(ctx context.Context) error
+}

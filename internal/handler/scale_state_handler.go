@@ -5,6 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 	"udesk.cn/ops/internal/types"
 )
@@ -13,7 +14,9 @@ import (
 type PendingHandler struct{}
 
 func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Pending state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+
+	log.Info("Handling Pending state", "alertScale", ctx.AlertScale.Name)
 	// 获取当前副本数作为原始副本数
 	originReplicas, err := ctx.ScaleStrategy.GetCurrentReplicas(
 		ctx.Context,
@@ -30,7 +33,7 @@ func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	status.OriginReplicas = originReplicas
 
 	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
-		ctx.Logger.Error(err, "failed to update status to scaling")
+		log.Error(err, "failed to update status to scaling")
 		return ctrl.Result{}, err
 	}
 
@@ -52,7 +55,8 @@ func (h *ScalingHandler) parseDuration(duration string) (time.Duration, error) {
 }
 
 func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
 
 	// 使用策略进行扩缩容
 	if err := h.scaleIfNeeded(ctx); err != nil {
@@ -81,7 +85,7 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		ctx.Client,
 		&ctx.AlertScale.Spec.ScaleTarget,
 	); err != nil {
-		ctx.Logger.Error(err, "failed to get available replicas")
+		log.Error(err, "failed to get available replicas")
 	} else {
 		ctx.AlertScale.Status.ScaleStatus.ScaledReplicas = availableReplicas
 	}
@@ -135,7 +139,8 @@ func (h *ScalingHandler) isScalingCompleted(ctx *types.ScaleContext) (bool, erro
 type ScaledHandler struct{}
 
 func (h *ScaledHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Scaled state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Scaled state", "alertScale", ctx.AlertScale.Name)
 
 	status := &ctx.AlertScale.Status.ScaleStatus
 
@@ -164,7 +169,8 @@ func (h *ScaledHandler) CanTransition(toState string) bool {
 type CompletedHandler struct{}
 
 func (h *CompletedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Completed state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Completed state", "alertScale", ctx.AlertScale.Name)
 
 	status := &ctx.AlertScale.Status.ScaleStatus
 
@@ -207,7 +213,8 @@ func (h *CompletedHandler) CanTransition(toState string) bool {
 type FailedHandler struct{}
 
 func (h *FailedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Failed state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Failed state", "alertScale", ctx.AlertScale.Name)
 	return ctrl.Result{}, nil
 }
 
@@ -219,7 +226,8 @@ func (h *FailedHandler) CanTransition(toState string) bool {
 type ArchivedHandler struct{}
 
 func (h *ArchivedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Handling Archived state", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Archived state", "alertScale", ctx.AlertScale.Name)
 	return ctrl.Result{}, nil
 }
 
@@ -231,7 +239,8 @@ func (h *ArchivedHandler) CanTransition(toState string) bool {
 type DefaultHandler struct{}
 
 func (h *DefaultHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	ctx.Logger.Info("Initializing AlertScale status", "alertScale", ctx.AlertScale.Name)
+	log := logf.FromContext(ctx.Context)
+	log.Info("Initializing AlertScale status", "alertScale", ctx.AlertScale.Name)
 
 	ctx.AlertScale.Status.ScaleStatus = opsv1beta1.ScaleStatus{
 		Status:         types.ScaleStatusPending,

@@ -22,12 +22,6 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the udesk-ops-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- alert_admin_role.yaml
-- alert_editor_role.yaml
-- alert_viewer_role.yaml
-- scalenotification_admin_role.yaml
-- scalenotification_editor_role.yaml
-- scalenotification_viewer_role.yaml
 - alertscale_admin_role.yaml
 - alertscale_editor_role.yaml
 - alertscale_viewer_role.yaml
