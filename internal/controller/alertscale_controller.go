@@ -52,7 +52,7 @@ func (r *AlertScaleReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// 创建上下文
 	scaleContext := &types.ScaleContext{
 		AlertScale:    alertScale,
-		Reconciler:    r.Client,
+		Client:        r.Client,
 		Request:       req,
 		Context:       ctx,
 		Logger:        log,
