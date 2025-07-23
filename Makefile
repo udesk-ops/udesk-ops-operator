@@ -106,6 +106,24 @@ build: manifests generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+.PHONY: setup-webhook-certs
+setup-webhook-certs: ## Generate webhook certificates for local development
+	@chmod +x hack/generate-webhook-certs.sh
+	@./hack/generate-webhook-certs.sh
+
+.PHONY: run-with-webhook
+run-with-webhook: setup-webhook-certs manifests generate fmt vet ## Run controller with webhook enabled
+	go run ./cmd/main.go
+
+.PHONY: run-without-webhook
+run-without-webhook: manifests generate fmt vet ## Run controller with webhook disabled
+	ENABLE_WEBHOOKS=false go run ./cmd/main.go
+
+.PHONY: test-webhook
+test-webhook: ## Test webhook functionality (requires kubectl and cluster access)
+	@chmod +x hack/test-webhook.sh
+	@./hack/test-webhook.sh
+
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/

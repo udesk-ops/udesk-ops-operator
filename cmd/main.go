@@ -219,10 +219,33 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		// 检查webhook证书是否存在
+		webhookCertDir := "/tmp/k8s-webhook-server/serving-certs"
+		certFile := filepath.Join(webhookCertDir, "tls.crt")
+		keyFile := filepath.Join(webhookCertDir, "tls.key")
+
+		// 检查证书文件
+		if _, err := os.Stat(certFile); os.IsNotExist(err) {
+			setupLog.Error(err, "webhook certificate not found", "path", certFile)
+			setupLog.Info("To generate certificates, run: ./hack/generate-webhook-certs.sh")
+			setupLog.Info("Or disable webhooks with: ENABLE_WEBHOOKS=false make run")
+			os.Exit(1)
+		}
+		if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+			setupLog.Error(err, "webhook key not found", "path", keyFile)
+			setupLog.Info("To generate certificates, run: ./hack/generate-webhook-certs.sh")
+			setupLog.Info("Or disable webhooks with: ENABLE_WEBHOOKS=false make run")
+			os.Exit(1)
+		}
+
+		setupLog.Info("Setting up webhook with certificates", "cert", certFile, "key", keyFile)
 		if err := webhookv1beta1.SetupScaleNotifyConfigWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ScaleNotifyConfig")
 			os.Exit(1)
 		}
+		setupLog.Info("Webhook registered successfully", "webhook", "ScaleNotifyConfig")
+	} else {
+		setupLog.Info("Webhooks disabled by ENABLE_WEBHOOKS environment variable")
 	}
 	// +kubebuilder:scaffold:builder
 

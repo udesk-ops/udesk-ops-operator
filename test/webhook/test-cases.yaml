@@ -1,0 +1,46 @@
+# 测试用例1: 第一个Email类型的默认配置 (应该成功)
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  name: test-email-default-1
+spec:
+  type: Email
+  default: true
+  config:
+    smtpServer: "smtp.example.com"
+    smtpPort: 587
+    smtpUser: "test@example.com"
+    smtpPassword: "password"
+    fromEmail: "noreply@example.com"
+    toEmail: "admin@example.com"
+---
+# 测试用例2: 第二个Email类型的默认配置 (应该被webhook拒绝)
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  name: test-email-default-2
+spec:
+  type: Email
+  default: true  # 这个应该被webhook拒绝，因为已经存在Email类型的默认配置
+  config:
+    smtpServer: "smtp2.example.com"
+    smtpPort: 587
+    smtpUser: "test2@example.com"
+    smtpPassword: "password2"
+    fromEmail: "noreply2@example.com"
+    toEmail: "admin2@example.com"
+---
+# 测试用例3: WXWorkRobot类型的默认配置 (应该成功，因为是不同类型)
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  name: test-wxwork-default-1
+spec:
+  type: WXWorkRobot
+  default: true
+  config:
+    webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=example"
+    secret: "secret"
+    messageTemplate: "Alert: {{.Message}}"
+    atUsers: ["user1", "user2"]
+    atAll: false
