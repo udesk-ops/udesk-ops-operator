@@ -10,9 +10,9 @@ import (
 
 // ScaleStrategy 定义扩缩容策略接口
 type ScaleStrategy interface {
-	Scale(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error
-	GetCurrentReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
-	GetAvailableReplicas(ctx context.Context, client client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
+	Scale(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error
+	GetCurrentReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
+	GetAvailableReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error)
 }
 
 // ScaleContext 包含所有状态处理所需的上下文
@@ -40,7 +40,21 @@ const (
 	ScaleStatusArchived  = "Archived"
 )
 
-type ScaleNotificationClient interface {
-	SendNotification(ctx context.Context, message string) error
+// ScaleNotifyClient 定义通知客户端接口
+type ScaleNotifyClient interface {
+	SendNotify(ctx context.Context, message string) error
 	Validate(ctx context.Context) error
 }
+
+// 通知类型常量
+const (
+	NotifyTypeWXWorkRobot = "WXWorkRobot"
+	NotifyTypeEmail       = "Email"
+)
+
+// 验证状态常量
+const (
+	ValidationStatusValid   = "Valid"
+	ValidationStatusInvalid = "Invalid"
+	ValidationStatusPending = "Pending"
+)

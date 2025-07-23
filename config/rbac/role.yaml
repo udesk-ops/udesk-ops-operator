@@ -3,9 +3,30 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: manager-role
-rules: 
-  - apiGroups: ["udesk.cn/ops"]
-    resources: ["alertscales"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-
+rules:
+- apiGroups:
+  - ops.udesk.cn
+  resources:
+  - scalenotifyconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ops.udesk.cn
+  resources:
+  - scalenotifyconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ops.udesk.cn
+  resources:
+  - scalenotifyconfigs/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -39,6 +39,7 @@ import (
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 	"udesk.cn/ops/internal/controller"
+	webhookv1beta1 "udesk.cn/ops/internal/webhook/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -208,6 +209,20 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertScale")
 		os.Exit(1)
+	}
+	if err := (&controller.ScaleNotifyConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScaleNotifyConfig")
+		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1beta1.SetupScaleNotifyConfigWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ScaleNotifyConfig")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

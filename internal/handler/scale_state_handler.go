@@ -76,7 +76,7 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		status := &ctx.AlertScale.Status.ScaleStatus
 		status.Status = types.ScaleStatusScaled
 		status.ScaleBeginTime = metav1.Now()
-		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Time.Add(duration))
+		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Add(duration))
 	}
 
 	// 检查是否超时
@@ -166,7 +166,7 @@ func (h *ScaledHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	}
 
 	// 等待到结束时间
-	if !status.ScaleEndTime.Time.IsZero() && status.ScaleEndTime.Time.After(time.Now()) {
+	if !status.ScaleEndTime.IsZero() && status.ScaleEndTime.After(time.Now()) {
 		return ctrl.Result{RequeueAfter: time.Until(status.ScaleEndTime.Time)}, nil
 	}
 

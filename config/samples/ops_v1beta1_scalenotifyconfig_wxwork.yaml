@@ -1,0 +1,17 @@
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  labels:
+    app.kubernetes.io/name: udesk-ops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: scalenotifyconfig-wxwork-default
+  namespace: default
+spec:
+  default: true
+  type: WXWorkRobot
+  config:
+    webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=example"
+    secret: "secret"
+    messageTemplate: "Alert: {{.Message}}"
+    atUsers: ["user1", "user2"]
+    atAll: false

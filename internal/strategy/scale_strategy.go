@@ -12,25 +12,25 @@ import (
 // DeploymentStrategy Deployment 扩缩容策略
 type DeploymentStrategy struct{}
 
-func (s *DeploymentStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
+func (s *DeploymentStrategy) Scale(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
 	deployment := &appv1.Deployment{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, deployment); err != nil {
+	if err := c.Get(ctx, key, deployment); err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(deployment.DeepCopy())
 	deployment.Spec.Replicas = &replicas
 
-	return r.Patch(ctx, deployment, patch)
+	return c.Patch(ctx, deployment, patch)
 }
 
-func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, deployment); err != nil {
+	if err := c.Get(ctx, key, deployment); err != nil {
 		return 0, err
 	}
 
@@ -41,11 +41,11 @@ func (s *DeploymentStrategy) GetCurrentReplicas(ctx context.Context, r client.Cl
 	return *deployment.Spec.Replicas, nil
 }
 
-func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	deployment := &appv1.Deployment{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, deployment); err != nil {
+	if err := c.Get(ctx, key, deployment); err != nil {
 		return 0, err
 	}
 
@@ -55,24 +55,24 @@ func (s *DeploymentStrategy) GetAvailableReplicas(ctx context.Context, r client.
 // StatefulSetStrategy StatefulSet 扩缩容策略
 type StatefulSetStrategy struct{}
 
-func (s *StatefulSetStrategy) Scale(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
+func (s *StatefulSetStrategy) Scale(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
 	statefulSet := &appv1.StatefulSet{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, statefulSet); err != nil {
+	if err := c.Get(ctx, key, statefulSet); err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(statefulSet.DeepCopy())
 	statefulSet.Spec.Replicas = &replicas
 
-	return r.Patch(ctx, statefulSet, patch)
+	return c.Patch(ctx, statefulSet, patch)
 }
-func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	statefulSet := &appv1.StatefulSet{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, statefulSet); err != nil {
+	if err := c.Get(ctx, key, statefulSet); err != nil {
 		return 0, err
 	}
 
@@ -82,11 +82,11 @@ func (s *StatefulSetStrategy) GetCurrentReplicas(ctx context.Context, r client.C
 
 	return *statefulSet.Spec.Replicas, nil
 }
-func (s *StatefulSetStrategy) GetAvailableReplicas(ctx context.Context, r client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+func (s *StatefulSetStrategy) GetAvailableReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
 	statefulSet := &appv1.StatefulSet{}
 	key := types.NamespacedName{Name: target.Name, Namespace: target.Namespace}
 
-	if err := r.Get(ctx, key, statefulSet); err != nil {
+	if err := c.Get(ctx, key, statefulSet); err != nil {
 		return 0, err
 	}
 

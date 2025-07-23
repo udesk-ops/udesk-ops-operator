@@ -8,7 +8,7 @@ import (
 	"udesk.cn/ops/internal/types"
 )
 
-var DefaultNotificationClient *types.ScaleNotificationClient
+var DefaultNotifyClient types.ScaleNotifyClient
 
 // WXWorkRobotNotificationClient represents the configuration for WeChat Work notifications.
 type WXWorkRobotNotificationClient struct {
@@ -20,15 +20,15 @@ type WXWorkRobotNotificationClient struct {
 }
 
 // Validate validates the WXWorkRobotConfig.
-func (c *WXWorkRobotNotificationClient) Validate() error {
+func (c *WXWorkRobotNotificationClient) Validate(ctx context.Context) error {
 	if c.WebhookURL == "" {
 		return fmt.Errorf("webhookURL is required")
 	}
 	return nil
 }
 
-func (c *WXWorkRobotNotificationClient) SendNotification(ctx context.Context, message string) error {
-	if err := c.Validate(); err != nil {
+func (c *WXWorkRobotNotificationClient) SendNotify(ctx context.Context, message string) error {
+	if err := c.Validate(ctx); err != nil {
 		return err
 	}
 
@@ -65,21 +65,10 @@ func (c *EmailNotificationClient) Validate(ctx context.Context) error {
 	if c.SMTPUser == "" || c.SMTPPassword == "" {
 		return fmt.Errorf("SMTPUser and SMTPPassword are required")
 	}
-	// Additional validation can be added here, such as checking email formats.
-	// For simplicity, we assume the email format is valid if not empty.
-	// In a real-world application, you might want to use regex or a library to validate
-	// the email format.
-	// For example:
-	// if !isValidEmail(c.FromEmail) {
-	//     return fmt.Errorf("FromEmail is not a valid email address")
-	// }
-	// if !isValidEmail(c.ToEmail) {
-	// 	return fmt.Errorf("ToEmail is not a valid email address")
-	// }
 	return nil
 }
 
-func (c *EmailNotificationClient) SendNotification(ctx context.Context, message string) error {
+func (c *EmailNotificationClient) SendNotify(ctx context.Context, message string) error {
 	if err := c.Validate(ctx); err != nil {
 		return err
 	}

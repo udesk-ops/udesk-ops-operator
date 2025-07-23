@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/ops.udesk.cn_alertscales.yaml
+- bases/ops.udesk.cn_scalenotifyconfigs.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

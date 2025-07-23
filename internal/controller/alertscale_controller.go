@@ -60,12 +60,12 @@ func (r *AlertScaleReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// 获取当前状态处理器
 	currentStatus := alertScale.Status.ScaleStatus.Status
-	handler, exists := r.StateHandlers[currentStatus]
+	stateHandler, exists := r.StateHandlers[currentStatus]
 	if !exists {
-		handler = r.StateHandlers["default"]
+		stateHandler = r.StateHandlers["default"]
 	}
 
-	return handler.Handle(scaleContext)
+	return stateHandler.Handle(scaleContext)
 }
 
 // SetupWithManager sets up the controller with the Manager.

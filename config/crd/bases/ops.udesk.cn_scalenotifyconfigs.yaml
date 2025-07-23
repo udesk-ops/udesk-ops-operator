@@ -1,0 +1,98 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: scalenotifyconfigs.ops.udesk.cn
+spec:
+  group: ops.udesk.cn
+  names:
+    kind: ScaleNotifyConfig
+    listKind: ScaleNotifyConfigList
+    plural: scalenotifyconfigs
+    shortNames:
+    - scn
+    singular: scalenotifyconfig
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.default
+      name: Default
+      type: boolean
+    - jsonPath: .status.validationStatus
+      name: Validation Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ScaleNotifyConfig is the Schema for the scalenotifyconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScaleNotifyConfigSpec defines the desired state of ScaleNotifyConfig.
+            properties:
+              config:
+                description: Config contains the configuration details for the scaling
+                  notification.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              default:
+                default: false
+                description: |-
+                  Default indicates whether this configuration is the default one.
+                  where the value must be a boolean.
+                  Example: true
+                type: boolean
+              type:
+                description: Type indicates the type of scaling notification.
+                enum:
+                - Email
+                - WXWorkRobot
+                type: string
+            required:
+            - default
+            - type
+            type: object
+          status:
+            description: ScaleNotifyConfigStatus defines the observed state of ScaleNotifyConfig.
+            properties:
+              validationStatus:
+                default: Pending
+                description: |-
+                  ValidationStatus indicates the validation status of the configuration.
+                  where the value must be one of the predefined statuses.
+                  Example: Valid
+                enum:
+                - Valid
+                - Invalid
+                - Pending
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

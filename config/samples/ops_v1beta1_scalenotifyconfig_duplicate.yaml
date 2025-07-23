@@ -1,0 +1,18 @@
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  labels:
+    app.kubernetes.io/name: udesk-ops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: scalenotifyconfig-email-duplicate
+  namespace: default
+spec:
+  default: true  # 这会与email-default冲突
+  type: Email
+  config:
+    smtpServer: "smtp2.example.com"
+    smtpPort: 587
+    smtpUser: "user2@example.com"
+    smtpPassword: "password2"
+    fromEmail: "noreply2@example.com"
+    toEmail: "admin2@example.com"

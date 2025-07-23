@@ -1,4 +1,5 @@
 ## Append samples of your project ##
 resources:
 - ops_v1beta1_alertscale.yaml
+- ops_v1beta1_scalenotifyconfig.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
