@@ -17,71 +17,435 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	// TODO (user): Add any additional imports if needed
 )
+
+// createRawExtension is a helper function to create runtime.RawExtension from map
+func createRawExtension(data map[string]interface{}) runtime.RawExtension {
+	bytes, _ := json.Marshal(data)
+	return runtime.RawExtension{Raw: bytes}
+}
 
 var _ = Describe("ScaleNotifyConfig Webhook", func() {
 	var (
-		obj       *opsv1beta1.ScaleNotifyConfig
-		oldObj    *opsv1beta1.ScaleNotifyConfig
-		validator ScaleNotifyConfigCustomValidator
-		defaulter ScaleNotifyConfigCustomDefaulter
+		ctx       context.Context
+		validator *ScaleNotifyConfigCustomValidator
+		scheme    *runtime.Scheme
 	)
 
 	BeforeEach(func() {
-		obj = &opsv1beta1.ScaleNotifyConfig{}
-		oldObj = &opsv1beta1.ScaleNotifyConfig{}
-		validator = ScaleNotifyConfigCustomValidator{}
-		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
-		defaulter = ScaleNotifyConfigCustomDefaulter{}
-		Expect(defaulter).NotTo(BeNil(), "Expected defaulter to be initialized")
-		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
-		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
-		// TODO (user): Add any setup logic common to all tests
+		ctx = context.Background()
+		scheme = runtime.NewScheme()
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(opsv1beta1.AddToScheme(scheme)).To(Succeed())
 	})
 
-	AfterEach(func() {
-		// TODO (user): Add any teardown logic common to all tests
+	Context("ValidateCreate", func() {
+		It("should allow creating the first default config of a type", func() {
+			// Setup: empty client (no existing configs)
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			config := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-email-1",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.example.com",
+						"smtpPort":     587,
+						"smtpUser":     "test@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "noreply@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should reject creating duplicate default config of same type", func() {
+			// Setup: client with existing default Email config
+			existingConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-email-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.existing.com",
+						"smtpPort":     587,
+						"smtpUser":     "existing@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "existing@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			duplicateConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-email-2",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp2.example.com",
+						"smtpPort":     587,
+						"smtpUser":     "test2@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "noreply2@example.com",
+						"toEmail":      "admin2@example.com",
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, duplicateConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("a default ScaleNotifyConfig of type 'Email' already exists"))
+			Expect(err.Error()).To(ContainSubstring("existing-email-default"))
+		})
+
+		It("should allow creating default config of different type", func() {
+			// Setup: client with existing default Email config
+			existingEmailConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-email-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.existing.com",
+						"smtpPort":     587,
+						"smtpUser":     "existing@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "existing@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingEmailConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			wxworkConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-wxwork-1",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "WXWorkRobot",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"webhookURL":      "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=example",
+						"secret":          "secret123",
+						"messageTemplate": "Alert: {{.Message}}",
+						"atUsers":         []string{"user1", "user2"},
+						"atAll":           false,
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, wxworkConfig)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should allow creating non-default config of same type", func() {
+			// Setup: client with existing default Email config
+			existingDefaultConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-email-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.existing.com",
+						"smtpPort":     587,
+						"smtpUser":     "existing@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "existing@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingDefaultConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			nonDefaultConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-email-non-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: false, // Non-default should be allowed
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp2.example.com",
+						"smtpPort":     587,
+						"smtpUser":     "test2@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "noreply2@example.com",
+						"toEmail":      "admin2@example.com",
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, nonDefaultConfig)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should reject config with invalid type", func() {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			invalidConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-invalid",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "InvalidType",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"invalid": "config",
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, invalidConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.type must be one of"))
+		})
+
+		It("should reject Email config with missing required fields", func() {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			incompleteConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-incomplete-email",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer": "smtp.example.com",
+						// Missing required fields: smtpUser, smtpPassword, fromEmail, toEmail
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, incompleteConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid Email configuration"))
+		})
+
+		It("should reject WXWorkRobot config with missing required fields", func() {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			incompleteConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-incomplete-wxwork",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "WXWorkRobot",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"secret": "secret123",
+						// Missing required field: webhookURL
+					}),
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, incompleteConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid WXWorkRobot configuration"))
+			Expect(err.Error()).To(ContainSubstring("webhookURL is required"))
+		})
 	})
 
-	Context("When creating ScaleNotifyConfig under Defaulting Webhook", func() {
-		// TODO (user): Add logic for defaulting webhooks
-		// Example:
-		// It("Should apply defaults when a required field is empty", func() {
-		//     By("simulating a scenario where defaults should be applied")
-		//     obj.SomeFieldWithDefault = ""
-		//     By("calling the Default method to apply defaults")
-		//     defaulter.Default(ctx, obj)
-		//     By("checking that the default values are set")
-		//     Expect(obj.SomeFieldWithDefault).To(Equal("default_value"))
-		// })
+	Context("ValidateUpdate", func() {
+		It("should allow updating non-default config to default when no other default exists", func() {
+			// Setup: client with non-default Email config
+			existingConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-email-non-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: false,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.existing.com",
+						"smtpPort":     587,
+						"smtpUser":     "existing@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "existing@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			updatedConfig := existingConfig.DeepCopy()
+			updatedConfig.Spec.Default = true // Change to default
+
+			_, err := validator.ValidateUpdate(ctx, existingConfig, updatedConfig)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should reject updating non-default config to default when another default exists", func() {
+			// Setup: client with existing default and non-default Email configs
+			existingDefaultConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.default.com",
+						"smtpPort":     587,
+						"smtpUser":     "default@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "default@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			existingNonDefaultConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-non-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: false,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.nondefault.com",
+						"smtpPort":     587,
+						"smtpUser":     "nondefault@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "nondefault@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingDefaultConfig, existingNonDefaultConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			updatedConfig := existingNonDefaultConfig.DeepCopy()
+			updatedConfig.Spec.Default = true // Try to change to default
+
+			_, err := validator.ValidateUpdate(ctx, existingNonDefaultConfig, updatedConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("a default ScaleNotifyConfig of type 'Email' already exists"))
+			Expect(err.Error()).To(ContainSubstring("existing-default"))
+		})
+
+		It("should allow updating default config configuration without changing default status", func() {
+			existingDefaultConfig := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "existing-default",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.old.com",
+						"smtpPort":     587,
+						"smtpUser":     "old@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "old@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(existingDefaultConfig).
+				Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			updatedConfig := existingDefaultConfig.DeepCopy()
+			updatedConfig.Spec.Config = createRawExtension(map[string]interface{}{
+				"smtpServer":   "smtp.new.com", // Updated server
+				"smtpPort":     587,
+				"smtpUser":     "new@example.com", // Updated user
+				"smtpPassword": "newpassword123",
+				"fromEmail":    "new@example.com",
+				"toEmail":      "admin@example.com",
+			})
+
+			_, err := validator.ValidateUpdate(ctx, existingDefaultConfig, updatedConfig)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
-	Context("When creating or updating ScaleNotifyConfig under Validating Webhook", func() {
-		// TODO (user): Add logic for validating webhooks
-		// Example:
-		// It("Should deny creation if a required field is missing", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = ""
-		//     Expect(validator.ValidateCreate(ctx, obj)).Error().To(HaveOccurred())
-		// })
-		//
-		// It("Should admit creation if all required fields are present", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = "valid_value"
-		//     Expect(validator.ValidateCreate(ctx, obj)).To(BeNil())
-		// })
-		//
-		// It("Should validate updates correctly", func() {
-		//     By("simulating a valid update scenario")
-		//     oldObj.SomeRequiredField = "updated_value"
-		//     obj.SomeRequiredField = "updated_value"
-		//     Expect(validator.ValidateUpdate(ctx, oldObj, obj)).To(BeNil())
-		// })
+	Context("ValidateDelete", func() {
+		It("should allow deleting any config", func() {
+			config := &opsv1beta1.ScaleNotifyConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-config",
+				},
+				Spec: opsv1beta1.ScaleNotifyConfigSpec{
+					Type:    "Email",
+					Default: true,
+					Config: createRawExtension(map[string]interface{}{
+						"smtpServer":   "smtp.example.com",
+						"smtpPort":     587,
+						"smtpUser":     "test@example.com",
+						"smtpPassword": "password123",
+						"fromEmail":    "test@example.com",
+						"toEmail":      "admin@example.com",
+					}),
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			validator = &ScaleNotifyConfigCustomValidator{Client: fakeClient}
+
+			_, err := validator.ValidateDelete(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 })

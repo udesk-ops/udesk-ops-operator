@@ -22,6 +22,8 @@ type WXWorkRobotNotificationClient struct {
 // Validate validates the WXWorkRobotConfig.
 func (c *WXWorkRobotNotificationClient) Validate(ctx context.Context) error {
 	if c.WebhookURL == "" {
+		// If WebhookURL is not provided, return an error
+		// This is a required field for sending notifications
 		return fmt.Errorf("webhookURL is required")
 	}
 	return nil
@@ -76,6 +78,8 @@ func (c *EmailNotificationClient) SendNotify(ctx context.Context, message string
 	// 这里可以添加发送邮件通知的逻辑
 	// 例如使用 SMTP 客户端发送邮件
 	log := logf.FromContext(ctx)
+
+	// 模拟发送邮件
 	log.Info("Sending email notification", "to", c.ToEmail, "message", message)
 	return nil
 }

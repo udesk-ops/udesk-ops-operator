@@ -58,8 +58,8 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test: manifests generate fmt vet setup-envtest ## Run tests including webhook unit tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -v $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -119,10 +119,6 @@ run-with-webhook: setup-webhook-certs manifests generate fmt vet ## Run controll
 run-without-webhook: manifests generate fmt vet ## Run controller with webhook disabled
 	ENABLE_WEBHOOKS=false go run ./cmd/main.go
 
-.PHONY: test-webhook
-test-webhook: ## Test webhook functionality (requires kubectl and cluster access)
-	@chmod +x hack/test-webhook.sh
-	@./hack/test-webhook.sh
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.

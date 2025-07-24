@@ -238,7 +238,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		setupLog.Info("Setting up webhook with certificates", "cert", certFile, "key", keyFile)
+		setupLog.Info("Setting up webhook with certificates1", "cert", certFile, "key", keyFile)
 		if err := webhookv1beta1.SetupScaleNotifyConfigWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ScaleNotifyConfig")
 			os.Exit(1)

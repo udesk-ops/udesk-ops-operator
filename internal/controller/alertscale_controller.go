@@ -15,6 +15,13 @@ import (
 	"udesk.cn/ops/internal/types"
 )
 
+const (
+	// ResourceKindDeployment represents Deployment resource kind
+	ResourceKindDeployment = "Deployment"
+	// ResourceKindStatefulSet represents StatefulSet resource kind
+	ResourceKindStatefulSet = "StatefulSet"
+)
+
 // AlertScaleReconciler reconciles a AlertScale object
 type AlertScaleReconciler struct {
 	client.Client
@@ -40,9 +47,9 @@ func (r *AlertScaleReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// 根据目标类型选择策略
 	var scaleStrategy types.ScaleStrategy
 	switch alertScale.Spec.ScaleTarget.Kind {
-	case "Deployment":
+	case ResourceKindDeployment:
 		scaleStrategy = &strategy.DeploymentStrategy{}
-	case "StatefulSet":
+	case ResourceKindStatefulSet:
 		scaleStrategy = &strategy.StatefulSetStrategy{}
 	default:
 		log.Info("Unsupported scale target kind", "kind", alertScale.Spec.ScaleTarget.Kind)
