@@ -29,11 +29,10 @@ import (
 
 const (
 	prometheusOperatorVersion = "v0.77.1"
-	prometheusOperatorURL     = "https://github.com/prometheus-operator/prometheus-operator/" +
-		"releases/download/%s/bundle.yaml"
+	prometheusOperatorURL     = "promethus.yaml"
 
 	certmanagerVersion = "v1.16.3"
-	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
+	certmanagerURLTmpl = "cert-manager.yaml"
 )
 
 func warnError(err error) {
@@ -44,7 +43,7 @@ func warnError(err error) {
 func Run(cmd *exec.Cmd) (string, error) {
 	dir, _ := GetProjectDir()
 	cmd.Dir = dir
-
+	fmt.Fprintf(GinkgoWriter, "running command in dir: %q\n", cmd.Dir)
 	if err := os.Chdir(cmd.Dir); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", err)
 	}
@@ -62,16 +61,16 @@ func Run(cmd *exec.Cmd) (string, error) {
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 func InstallPrometheusOperator() error {
-	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "create", "-f", url)
+	// url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
+	cmd := exec.Command("kubectl", "create", "-f", "config/samples/promethus.yaml")
 	_, err := Run(cmd)
 	return err
 }
 
 // UninstallPrometheusOperator uninstalls the prometheus
 func UninstallPrometheusOperator() {
-	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
+	// url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
+	cmd := exec.Command("kubectl", "delete", "-f", "config/samples/promethus.yaml")
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -106,8 +105,8 @@ func IsPrometheusCRDsInstalled() bool {
 
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
-	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
+	// url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
+	cmd := exec.Command("kubectl", "delete", "-f", "config/samples/cert-manager.yaml")
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -115,8 +114,8 @@ func UninstallCertManager() {
 
 // InstallCertManager installs the cert manager bundle.
 func InstallCertManager() error {
-	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "apply", "-f", url)
+	// url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
+	cmd := exec.Command("kubectl", "apply", "-f", "config/samples/cert-manager.yaml")
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
@@ -174,7 +173,44 @@ func LoadImageToKindClusterWithName(name string) error {
 	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	cmd := exec.Command("kind", kindOptions...)
 	_, err := Run(cmd)
-	return err
+
+	if err != nil {
+		return fmt.Errorf("failed to load image %q to kind cluster %q: %w", name, cluster, err)
+	}
+
+	kindOptions = []string{"load", "docker-image", "quay.io/jetstack/cert-manager-controller:v1.16.3", "--name", cluster}
+	cmd = exec.Command("kind", kindOptions...)
+	_, err = Run(cmd)
+
+	if err != nil {
+		return fmt.Errorf("failed to load cert-manager-controller image to kind cluster %q: %w", cluster, err)
+	}
+
+	kindOptions = []string{"load", "docker-image", "quay.io/jetstack/cert-manager-webhook:v1.16.3", "--name", cluster}
+	cmd = exec.Command("kind", kindOptions...)
+	_, err = Run(cmd)
+
+	if err != nil {
+		return fmt.Errorf("failed to load cert-manager-webhook image to kind cluster %q: %w", cluster, err)
+	}
+
+	kindOptions = []string{"load", "docker-image", "quay.io/jetstack/cert-manager-cainjector:v1.16.3", "--name", cluster}
+	cmd = exec.Command("kind", kindOptions...)
+	_, err = Run(cmd)
+
+	if err != nil {
+		return fmt.Errorf("failed to load cert-manager-cainjector image to kind cluster %q: %w", cluster, err)
+	}
+
+	kindOptions = []string{"load", "docker-image", "curlimages/curl:v1.0.0", "--name", cluster}
+	cmd = exec.Command("kind", kindOptions...)
+	_, err = Run(cmd)
+
+	if err != nil {
+		return fmt.Errorf("failed to load curl image to kind cluster %q: %w", cluster, err)
+	}
+
+	return nil
 }
 
 // GetNonEmptyLines converts given command output string into individual objects
