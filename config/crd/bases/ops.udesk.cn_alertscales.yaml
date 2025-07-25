@@ -21,6 +21,9 @@ spec:
     - jsonPath: .spec.scaleTarget.name
       name: Target
       type: string
+    - jsonPath: .spec.scaleAutoApproval
+      name: AutoApproval
+      type: boolean
     - jsonPath: .status.scaleStatus.status
       name: Status
       type: string
@@ -67,6 +70,12 @@ spec:
           spec:
             description: AlertScaleSpec defines the desired state of AlertScale.
             properties:
+              scaleAutoApproval:
+                default: false
+                description: |-
+                  ScaleAutoApproval indicates whether the scaling operation requires auto-approval.
+                  Example: true
+                type: boolean
               scaleDuration:
                 description: |-
                   ScaleDuration is the duration for which the scaling should be applied.
@@ -77,8 +86,8 @@ spec:
                 description: ScaleNotification defines the notification settings for
                   scaling alerts.
                 enum:
-                - email
-                - wxworkrobot
+                - Email
+                - WXWorkRobot
                 type: string
               scaleReason:
                 description: |-
@@ -180,6 +189,9 @@ spec:
                     - Failed
                     - Completed
                     - Archived
+                    - Approvaling
+                    - Approved
+                    - Rejected
                     type: string
                 type: object
             type: object

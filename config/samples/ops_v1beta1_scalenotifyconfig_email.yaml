@@ -12,7 +12,9 @@ spec:
   config:
     smtpServer: "smtp.example.com"
     smtpPort: 587
-    smtpUser: "user@example.com"
-    smtpPassword: "password"
+    username: "user@example.com"
+    password: "password"
     fromEmail: "noreply@example.com"
-    toEmail: "admin@example.com"
+    toEmails: ["admin@example.com", "ops@example.com"]
+    subject: "AlertScale 扩容通知"
+    messageTemplate: "AlertScale 通知\n\n{{.Message}}\n\n发送时间: {{.Time}}"

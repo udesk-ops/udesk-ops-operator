@@ -61,7 +61,7 @@ type ScaleNotifyConfigStatus struct {
 // +kubebuilder:resource:scope=Cluster,shortName=scn;
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.type`
 // +kubebuilder:printcolumn:name="Default",type=boolean,JSONPath=`.spec.default`
-// +kubebuilder:printcolumn:name="Validation Status",type=string,JSONPath=`.status.validationStatus`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.validationStatus`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // ScaleNotifyConfig is the Schema for the scalenotifyconfigs API.
 type ScaleNotifyConfig struct {

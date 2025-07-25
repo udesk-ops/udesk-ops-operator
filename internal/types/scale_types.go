@@ -32,12 +32,15 @@ type StateHandler interface {
 
 // 状态常量
 const (
-	ScaleStatusPending   = "Pending"
-	ScaleStatusScaling   = "Scaling"
-	ScaleStatusScaled    = "Scaled"
-	ScaleStatusCompleted = "Completed"
-	ScaleStatusFailed    = "Failed"
-	ScaleStatusArchived  = "Archived"
+	ScaleStatusPending     = "Pending"
+	ScaleStatusScaling     = "Scaling"
+	ScaleStatusScaled      = "Scaled"
+	ScaleStatusCompleted   = "Completed"
+	ScaleStatusApprovaling = "Approvaling"
+	ScaleStatusApproved    = "Approved"
+	ScaleStatusRejected    = "Rejected"
+	ScaleStatusFailed      = "Failed"
+	ScaleStatusArchived    = "Archived"
 )
 
 // ScaleNotifyClient 定义通知客户端接口

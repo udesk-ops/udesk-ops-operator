@@ -35,12 +35,6 @@ type ScaleNotifyConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-var hasDefaultNotifyClient map[string]bool
-
-func init() {
-	hasDefaultNotifyClient = make(map[string]bool) // Initialize the map to track default notify clients
-}
-
 // +kubebuilder:rbac:groups=ops.udesk.cn,resources=scalenotifyconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ops.udesk.cn,resources=scalenotifyconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ops.udesk.cn,resources=scalenotifyconfigs/finalizers,verbs=update
@@ -65,53 +59,33 @@ func (r *ScaleNotifyConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// 如果这是一个默认配置且状态为Valid，设置相应的通知客户端
-	if config.Spec.Default && config.Status.ValidationStatus == types.ValidationStatusValid {
-		if _, exists := hasDefaultNotifyClient[config.Spec.Type]; !exists {
-			log.Info("Setting up default ScaleNotifyClient for type", "type", config.Spec.Type, "name", config.Name)
-			var notifyClient types.ScaleNotifyClient
-			switch config.Spec.Type {
-			case types.NotifyTypeWXWorkRobot:
-				notifyClient = &strategy.WXWorkRobotNotificationClient{}
-				strategy.DefaultNotifyClient = notifyClient
-			case types.NotifyTypeEmail:
-				notifyClient = &strategy.EmailNotificationClient{}
-				strategy.DefaultNotifyClient = notifyClient
-			default:
-				log.Error(nil, "Unsupported notification type", "type", config.Spec.Type)
-				// 标记配置为invalid
-				config.Status.ValidationStatus = types.ValidationStatusInvalid
-				if updateErr := r.Status().Update(ctx, &config); updateErr != nil {
-					log.Error(updateErr, "Failed to update config status", "name", config.Name)
-				}
-				return ctrl.Result{}, nil
-			}
-
-			// 验证配置
-			if err := notifyClient.Validate(ctx); err != nil {
-				log.Error(err, "Invalid configuration for ScaleNotifyClient", "type", config.Spec.Type)
-				// 标记配置为invalid
-				config.Status.ValidationStatus = types.ValidationStatusInvalid
-				if updateErr := r.Status().Update(ctx, &config); updateErr != nil {
-					log.Error(updateErr, "Failed to update config status", "name", config.Name)
-				}
-				return ctrl.Result{}, nil
-			}
-
-			// 标记配置为valid
-			if config.Status.ValidationStatus != types.ValidationStatusValid {
-				config.Status.ValidationStatus = types.ValidationStatusValid
-				if err := r.Status().Update(ctx, &config); err != nil {
-					log.Error(err, "Failed to update config status", "name", config.Name)
-					return ctrl.Result{}, err
-				}
-			}
-
-			log.Info("Default ScaleNotifyClient set up successfully", "type", config.Spec.Type)
-			hasDefaultNotifyClient[config.Spec.Type] = true
-		} else {
-			log.Info("Default ScaleNotifyClient already exists for type", "type", config.Spec.Type)
+	// 初始化状态（如果为空）
+	if config.Status.ValidationStatus == "" {
+		config.Status.ValidationStatus = types.ValidationStatusPending
+		if err := r.Status().Update(ctx, &config); err != nil {
+			log.Error(err, "Failed to initialize config status", "name", config.Name)
+			return ctrl.Result{}, err
 		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// 验证配置并更新状态
+	if config.Status.ValidationStatus == types.ValidationStatusPending {
+		if err := r.validateConfigAndUpdateStatus(ctx, &config); err != nil {
+			log.Error(err, "Failed to validate config", "name", config.Name)
+			// 如果是资源不存在错误，忽略它（可能已被删除）
+			if client.IgnoreNotFound(err) == nil {
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// 如果状态是valid且是默认配置，则可以设置默认通知客户端
+	if config.Status.ValidationStatus == types.ValidationStatusValid && config.Spec.Default {
+		strategy.DefaultNotifyClientMap[config.Spec.Type] = strategy.NewScaleNotifyClient(config.Spec.Type, config.Spec.Config)
+		log.Info("Default notification client set", "name", config.Name, "type", config.Spec.Type)
 	}
 
 	return ctrl.Result{}, nil
@@ -123,4 +97,45 @@ func (r *ScaleNotifyConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&opsv1beta1.ScaleNotifyConfig{}).
 		Named("scalenotifyconfig").
 		Complete(r)
+}
+
+// validateConfigAndUpdateStatus 验证配置并更新状态
+func (r *ScaleNotifyConfigReconciler) validateConfigAndUpdateStatus(ctx context.Context, config *opsv1beta1.ScaleNotifyConfig) error {
+	log := logf.FromContext(ctx)
+
+	// // 创建相应的通知客户端进行验证
+	var notifyClient types.ScaleNotifyClient
+	var err error
+	// 根据配置类型创建不同的通知客户端
+	switch config.Spec.Type {
+	case types.NotifyTypeWXWorkRobot:
+		if notifyClient, err = strategy.NewWXWorkRobotNotificationClient(config.Spec.Config); err != nil {
+			log.Error(err, "Failed to create WeChat Work notification client", "type", config.Spec.Type)
+			config.Status.ValidationStatus = types.ValidationStatusInvalid
+			return r.Status().Update(ctx, config)
+		}
+	case types.NotifyTypeEmail:
+		if notifyClient, err = strategy.NewEmailNotificationClient(config.Spec.Config); err != nil {
+			log.Error(err, "Failed to create Email notification client", "type", config.Spec.Type)
+			config.Status.ValidationStatus = types.ValidationStatusInvalid
+			return r.Status().Update(ctx, config)
+		}
+	default:
+		log.Error(nil, "Unsupported notification type", "type", config.Spec.Type)
+		config.Status.ValidationStatus = types.ValidationStatusInvalid
+		return r.Status().Update(ctx, config)
+	}
+
+	// 验证配置
+	if err := notifyClient.Validate(ctx); err != nil {
+		log.Error(err, "Configuration validation failed", "type", config.Spec.Type)
+		config.Status.ValidationStatus = types.ValidationStatusInvalid
+		return r.Status().Update(ctx, config)
+	}
+
+	// 验证成功
+	config.Status.ValidationStatus = types.ValidationStatusValid
+
+	log.Info("Configuration validated successfully", "name", config.Name, "type", config.Spec.Type)
+	return r.Status().Update(ctx, config)
 }

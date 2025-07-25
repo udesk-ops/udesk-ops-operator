@@ -64,12 +64,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.example.com",
-						"smtpPort":     587,
-						"smtpUser":     "test@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "noreply@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.example.com",
+						"smtpPort":   587,
+						"username":   "test@example.com",
+						"password":   "password123",
+						"fromEmail":  "noreply@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -88,12 +88,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.existing.com",
-						"smtpPort":     587,
-						"smtpUser":     "existing@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "existing@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.existing.com",
+						"smtpPort":   587,
+						"username":   "existing@example.com",
+						"password":   "password123",
+						"fromEmail":  "existing@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -112,12 +112,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp2.example.com",
-						"smtpPort":     587,
-						"smtpUser":     "test2@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "noreply2@example.com",
-						"toEmail":      "admin2@example.com",
+						"smtpServer": "smtp2.example.com",
+						"smtpPort":   587,
+						"username":   "test2@example.com",
+						"password":   "password123",
+						"fromEmail":  "noreply2@example.com",
+						"toEmails":   []string{"admin2@example.com"},
 					}),
 				},
 			}
@@ -138,12 +138,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.existing.com",
-						"smtpPort":     587,
-						"smtpUser":     "existing@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "existing@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.existing.com",
+						"smtpPort":   587,
+						"username":   "existing@example.com",
+						"password":   "password123",
+						"fromEmail":  "existing@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -185,12 +185,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.existing.com",
-						"smtpPort":     587,
-						"smtpUser":     "existing@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "existing@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.existing.com",
+						"smtpPort":   587,
+						"username":   "existing@example.com",
+						"password":   "password123",
+						"fromEmail":  "existing@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -209,12 +209,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: false, // Non-default should be allowed
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp2.example.com",
-						"smtpPort":     587,
-						"smtpUser":     "test2@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "noreply2@example.com",
-						"toEmail":      "admin2@example.com",
+						"smtpServer": "smtp2.example.com",
+						"smtpPort":   587,
+						"username":   "test2@example.com",
+						"password":   "password123",
+						"fromEmail":  "noreply2@example.com",
+						"toEmails":   []string{"admin2@example.com"},
 					}),
 				},
 			}
@@ -258,7 +258,7 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
 						"smtpServer": "smtp.example.com",
-						// Missing required fields: smtpUser, smtpPassword, fromEmail, toEmail
+						// Missing required fields: username, password, fromEmail, toEmails
 					}),
 				},
 			}
@@ -304,12 +304,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: false,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.existing.com",
-						"smtpPort":     587,
-						"smtpUser":     "existing@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "existing@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.existing.com",
+						"smtpPort":   587,
+						"username":   "existing@example.com",
+						"password":   "password123",
+						"fromEmail":  "existing@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -337,12 +337,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.default.com",
-						"smtpPort":     587,
-						"smtpUser":     "default@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "default@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.default.com",
+						"smtpPort":   587,
+						"username":   "default@example.com",
+						"password":   "password123",
+						"fromEmail":  "default@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -355,12 +355,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: false,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.nondefault.com",
-						"smtpPort":     587,
-						"smtpUser":     "nondefault@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "nondefault@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.nondefault.com",
+						"smtpPort":   587,
+						"username":   "nondefault@example.com",
+						"password":   "password123",
+						"fromEmail":  "nondefault@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -389,12 +389,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.old.com",
-						"smtpPort":     587,
-						"smtpUser":     "old@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "old@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.old.com",
+						"smtpPort":   587,
+						"username":   "old@example.com",
+						"password":   "password123",
+						"fromEmail":  "old@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}
@@ -407,12 +407,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 
 			updatedConfig := existingDefaultConfig.DeepCopy()
 			updatedConfig.Spec.Config = createRawExtension(map[string]interface{}{
-				"smtpServer":   "smtp.new.com", // Updated server
-				"smtpPort":     587,
-				"smtpUser":     "new@example.com", // Updated user
-				"smtpPassword": "newpassword123",
-				"fromEmail":    "new@example.com",
-				"toEmail":      "admin@example.com",
+				"smtpServer": "smtp.new.com", // Updated server
+				"smtpPort":   587,
+				"username":   "new@example.com", // Updated user
+				"password":   "newpassword123",
+				"fromEmail":  "new@example.com",
+				"toEmails":   []string{"admin@example.com"},
 			})
 
 			_, err := validator.ValidateUpdate(ctx, existingDefaultConfig, updatedConfig)
@@ -430,12 +430,12 @@ var _ = Describe("ScaleNotifyConfig Webhook", func() {
 					Type:    "Email",
 					Default: true,
 					Config: createRawExtension(map[string]interface{}{
-						"smtpServer":   "smtp.example.com",
-						"smtpPort":     587,
-						"smtpUser":     "test@example.com",
-						"smtpPassword": "password123",
-						"fromEmail":    "test@example.com",
-						"toEmail":      "admin@example.com",
+						"smtpServer": "smtp.example.com",
+						"smtpPort":   587,
+						"username":   "test@example.com",
+						"password":   "password123",
+						"fromEmail":  "test@example.com",
+						"toEmails":   []string{"admin@example.com"},
 					}),
 				},
 			}

@@ -1,9 +1,0 @@
-apiVersion: ops.udesk.cn/v1beta1
-kind: ScaleNotifyConfig
-metadata:
-  labels:
-    app.kubernetes.io/name: udesk-ops-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: scalenotifyconfig-sample
-spec:
-  # TODO(user): Add fields here

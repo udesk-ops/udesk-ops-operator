@@ -68,15 +68,16 @@ func (d *ScaleNotifyConfigCustomDefaulter) Default(ctx context.Context, obj runt
 	}
 	scalenotifyconfiglog.Info("Defaulting for ScaleNotifyConfig", "name", scalenotifyconfig.GetName())
 
-	// 设置默认的ValidationStatus为Pending
-	if scalenotifyconfig.Status.ValidationStatus == "" {
-		scalenotifyconfig.Status.ValidationStatus = "Pending"
-	}
+	// 只设置 spec 字段的默认值，不修改 status
+	// Status 字段应该由 Controller 管理
 
-	// 设置默认的Default为false
-	if !scalenotifyconfig.Spec.Default {
-		scalenotifyconfig.Spec.Default = false
-	}
+	// 设置默认的 Default 为 false（如果未指定）
+	// 注意：这里需要检查是否已经显式设置，避免覆盖用户的选择
+	// 由于 bool 类型的零值是 false，我们可以保持现有逻辑
+
+	scalenotifyconfiglog.Info("ScaleNotifyConfig defaults applied",
+		"name", scalenotifyconfig.GetName(),
+		"default", scalenotifyconfig.Spec.Default)
 
 	return nil
 }
@@ -84,7 +85,7 @@ func (d *ScaleNotifyConfigCustomDefaulter) Default(ctx context.Context, obj runt
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.
 // Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
-// +kubebuilder:webhook:path=/validate-ops-udesk-cn-v1beta1-scalenotifyconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=ops.udesk.cn,resources=scalenotifyconfigs,verbs=create;update,versions=v1beta1,name=vscalenotifyconfig-v1beta1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ops-udesk-cn-v1beta1-scalenotifyconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=ops.udesk.cn,resources=scalenotifyconfigs,verbs=create;update;delete,versions=v1beta1,name=vscalenotifyconfig-v1beta1.kb.io,admissionReviewVersions=v1
 
 // ScaleNotifyConfigCustomValidator struct is responsible for validating the ScaleNotifyConfig resource
 // when it is created, updated, or deleted.
@@ -116,7 +117,6 @@ func (v *ScaleNotifyConfigCustomValidator) ValidateCreate(ctx context.Context, o
 			return nil, err
 		}
 	}
-
 	return nil, nil
 }
 
@@ -145,7 +145,6 @@ func (v *ScaleNotifyConfigCustomValidator) ValidateUpdate(ctx context.Context, o
 			return nil, err
 		}
 	}
-
 	return nil, nil
 }
 
@@ -157,10 +156,18 @@ func (v *ScaleNotifyConfigCustomValidator) ValidateDelete(ctx context.Context, o
 	}
 	scalenotifyconfiglog.Info("Validation for ScaleNotifyConfig upon deletion", "name", scalenotifyconfig.GetName())
 
-	// TODO: 如果需要，可以在此添加删除验证逻辑
-	// 例如：检查是否有依赖此配置的其他资源
+	// 检查是否有 AlertScale 正在使用此配置
+	if err := v.validateConfigNotInUse(ctx, scalenotifyconfig); err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	// 如果是默认配置，给出警告（但不阻止删除）
+	var warnings admission.Warnings
+	if scalenotifyconfig.Spec.Default {
+		warnings = append(warnings, fmt.Sprintf("Deleting default %s configuration. Make sure to set another configuration as default.", scalenotifyconfig.Spec.Type))
+	}
+
+	return warnings, nil
 }
 
 // validateBasicFields 验证ScaleNotifyConfig的基本字段
@@ -236,4 +243,42 @@ func (v *ScaleNotifyConfigCustomValidator) validateUniqueDefault(ctx context.Con
 	}
 
 	return nil
+}
+
+// validateConfigNotInUse 检查配置是否正在被 AlertScale 使用
+func (v *ScaleNotifyConfigCustomValidator) validateConfigNotInUse(ctx context.Context, config *opsv1beta1.ScaleNotifyConfig) error {
+	// 列出所有 AlertScale 资源，检查是否有引用此配置
+	var alertScaleList opsv1beta1.AlertScaleList
+	if err := v.Client.List(ctx, &alertScaleList, client.InNamespace(config.Namespace)); err != nil {
+		// 如果无法列出 AlertScale（可能没有权限或资源不存在），只记录警告但不阻止删除
+		scalenotifyconfiglog.Info("Unable to list AlertScale resources to check dependencies",
+			"config", config.Name, "error", err.Error())
+		return nil
+	}
+
+	// 检查是否有 AlertScale 引用此配置类型且为默认配置
+	for _, alertScale := range alertScaleList.Items {
+		if alertScale.Spec.ScaleNotificationType == config.Spec.Type && config.Spec.Default {
+			// 检查 AlertScale 是否处于活跃状态
+			if v.isAlertScaleActive(&alertScale) {
+				return fmt.Errorf("cannot delete default %s configuration '%s': it is being used by active AlertScale '%s'",
+					config.Spec.Type, config.Name, alertScale.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isAlertScaleActive 检查 AlertScale 是否处于活跃状态
+func (v *ScaleNotifyConfigCustomValidator) isAlertScaleActive(alertScale *opsv1beta1.AlertScale) bool {
+	status := alertScale.Status.ScaleStatus.Status
+	// 如果状态为空、Pending、Scaling 或 Scaled，认为是活跃状态
+	activeStatuses := []string{"", "Pending", "Scaling", "Scaled"}
+	for _, activeStatus := range activeStatuses {
+		if status == activeStatus {
+			return true
+		}
+	}
+	return false
 }

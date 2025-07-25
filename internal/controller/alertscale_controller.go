@@ -15,6 +15,13 @@ import (
 	"udesk.cn/ops/internal/types"
 )
 
+//+kubebuilder:rbac:groups=ops.udesk.cn,resources=alertscales,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ops.udesk.cn,resources=alertscales/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=ops.udesk.cn,resources=alertscales/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+
 const (
 	// ResourceKindDeployment represents Deployment resource kind
 	ResourceKindDeployment = "Deployment"

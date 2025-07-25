@@ -24,7 +24,7 @@ type ScaleStatus struct {
 	// Status indicates the current status of the scaling operation.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Enum=Pending;Scaling;Scaled;Failed;Completed;Archived
+	// +kubebuilder:validation:Enum=Pending;Scaling;Scaled;Failed;Completed;Archived;Approvaling;Approved;Rejected
 	// where the value must be one of the predefined statuses.
 	Status string `json:"status,omitempty"`
 	// ScaleBeginTime is the time when the scaling operation began.
@@ -118,7 +118,7 @@ type AlertScaleSpec struct {
 	// ScaleNotification defines the notification settings for scaling alerts.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Enum=email;wxworkrobot
+	// +kubebuilder:validation:Enum=Email;WXWorkRobot
 	ScaleNotificationType string `json:"scaleNotificationType,omitempty"`
 	// ScaleTimeout is the timeout for the scaling operation.
 	// +kubebuilder:validation:Optional
@@ -126,6 +126,13 @@ type AlertScaleSpec struct {
 	// +kubebuilder:validation:Pattern=`^(\d+)([smhdw])$`
 	// where s=seconds, m=minutes, h=hours, d=days, w=weeks
 	ScaleTimeout string `json:"scaleTimeout,omitempty"`
+
+	// ScaleAutoApproval indicates whether the scaling operation requires auto-approval.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=boolean
+	// +kubebuilder:default=false
+	// Example: true
+	ScaleAutoApproval bool `json:"scaleAutoApproval,omitempty"`
 }
 
 // AlertScaleStatus defines the observed state of AlertScale.
@@ -140,6 +147,7 @@ type AlertScaleStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=as;ascale
 // +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.scaleTarget.name`
+// +kubebuilder:printcolumn:name="AutoApproval",type=boolean,JSONPath=`.spec.scaleAutoApproval`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.scaleStatus.status`
 // +kubebuilder:printcolumn:name="Origin-Replicas",type=integer,JSONPath=`.status.scaleStatus.originReplicas`
 // +kubebuilder:printcolumn:name="Scaled-Replicas",type=integer,JSONPath=`.status.scaleStatus.scaledReplicas`

@@ -24,7 +24,7 @@ spec:
       name: Default
       type: boolean
     - jsonPath: .status.validationStatus
-      name: Validation Status
+      name: Status
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age

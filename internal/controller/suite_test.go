@@ -105,7 +105,7 @@ var _ = Describe("AlertScale Controller", func() {
 				Spec: opsv1beta1.AlertScaleSpec{
 					ScaleReason:           "Test reason",
 					ScaleDuration:         "5m",
-					ScaleNotificationType: "email",
+					ScaleNotificationType: "Email",
 					ScaleTarget: opsv1beta1.ScaleTarget{
 						APIVersion: "apps/v1",
 						Kind:       "Deployment",

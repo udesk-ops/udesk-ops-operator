@@ -7,8 +7,91 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/strategy"
 	"udesk.cn/ops/internal/types"
 )
+
+func parseDuration(duration string) (time.Duration, error) {
+	if duration == "" {
+		duration = "5m"
+	}
+	return time.ParseDuration(duration)
+}
+
+// ApprovalingHandler 处理 Approvaling 状态
+type ApprovalingHandler struct{}
+
+func (h *ApprovalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Approvaling state", "alertScale", ctx.AlertScale.Name)
+
+	// 检查是否需要自动批准
+	if ctx.AlertScale.Spec.ScaleAutoApproval {
+		log.Info("Auto approval enabled, transitioning to Approved state")
+		ctx.AlertScale.Status.ScaleStatus.Status = types.ScaleStatusApproved
+		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+			log.Error(err, "Failed to update status to Approved")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+	// 如果不需要自动批准，保持在 Approvaling 状态 直到超时
+	if timeout, err := parseDuration(ctx.AlertScale.Spec.ScaleTimeout); err != nil {
+		log.Error(err, "Failed to parse scale timeout duration")
+		return ctrl.Result{}, err
+	} else {
+		if ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime.IsZero() {
+			ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime = metav1.Now()
+		}
+		if ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime.Add(timeout).Before(time.Now()) {
+			log.Info("Approval timeout reached, transitioning to Rejected state")
+			ctx.AlertScale.Status.ScaleStatus.Status = types.ScaleStatusRejected
+			if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+				log.Error(err, "Failed to update status to Rejected")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+	}
+	log.Info("Waiting for approval", "alertScale", ctx.AlertScale.Name)
+	// 继续等待批准
+	return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+}
+
+func (h *ApprovalingHandler) CanTransition(toState string) bool {
+	return toState == types.ScaleStatusApproved || toState == types.ScaleStatusRejected
+}
+
+// ApprovedHandler 处理 Approved 状态
+type ApprovedHandler struct{}
+
+func (h *ApprovedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
+	log := logf.FromContext(ctx.Context)
+	log.Info("Handling Approved state", "alertScale", ctx.AlertScale.Name)
+	// 更新状态为 Scaling
+	ctx.AlertScale.Status.ScaleStatus.Status = types.ScaleStatusScaling
+	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+		log.Error(err, "Failed to update status to Scaling")
+		return ctrl.Result{}, err
+	}
+	// 发送通知
+	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
+	if defaultNotifyClient != nil {
+		if err := defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation approved for AlertScale: "+ctx.AlertScale.Name); err != nil {
+			log.Error(err, "Failed to send notification for approved scaling")
+			return ctrl.Result{}, err
+		}
+	} else {
+		log.Info("No default notification client found for approved scaling")
+	}
+	// 返回结果，继续处理 Scaling 状态
+	log.Info("Transitioning to Scaling state for AlertScale", "alertScale", ctx.AlertScale.Name)
+	return ctrl.Result{Requeue: true}, nil
+}
+
+func (h *ApprovedHandler) CanTransition(toState string) bool {
+	return toState == types.ScaleStatusScaling
+}
 
 // PendingHandler 处理 Pending 状态
 type PendingHandler struct{}
@@ -26,17 +109,27 @@ func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	// 更新状态
 	status := &ctx.AlertScale.Status.ScaleStatus
-	status.Status = types.ScaleStatusScaling
 	status.OriginReplicas = originReplicas
+	status.Status = types.ScaleStatusApprovaling
 
 	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 		log.Error(err, "failed to update status to scaling")
 		return ctrl.Result{}, err
 	}
 
+	// 发送通知
+	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
+	if defaultNotifyClient != nil {
+		if err := defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation pending for AlertScale: "+ctx.AlertScale.Name); err != nil {
+			log.Error(err, "Failed to send notification for pending scaling")
+			return ctrl.Result{}, err
+		}
+	} else {
+		log.Info("No default notification client found for pending scaling")
+	}
+	log.Info("Transitioning to Approvaling state for AlertScale", "alertScale", ctx.AlertScale.Name)
+	// 返回结果，继续处理 Approvaling 状态
 	return ctrl.Result{Requeue: true}, nil
 }
 
@@ -47,17 +140,11 @@ func (h *PendingHandler) CanTransition(toState string) bool {
 // ScalingHandler 处理 Scaling 状态
 type ScalingHandler struct{}
 
-func (h *ScalingHandler) parseDuration(duration string) (time.Duration, error) {
-	if duration == "" {
-		duration = "5m"
-	}
-	return time.ParseDuration(duration)
-}
-
 func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 	log.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
-
+	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
+	defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation started for AlertScale: "+ctx.AlertScale.Name)
 	// 使用策略进行扩缩容
 	if err := h.scaleIfNeeded(ctx); err != nil {
 		return ctrl.Result{}, err
@@ -68,7 +155,7 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	} else if isCompleted {
 		// 解析持续时间
-		duration, err := h.parseDuration(ctx.AlertScale.Spec.ScaleDuration)
+		duration, err := parseDuration(ctx.AlertScale.Spec.ScaleDuration)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -81,7 +168,7 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 
 	// 检查是否超时
 	currentScaleBeginTime := ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime
-	timeoutDuration, err := h.parseDuration(ctx.AlertScale.Spec.ScaleTimeout)
+	timeoutDuration, err := parseDuration(ctx.AlertScale.Spec.ScaleTimeout)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

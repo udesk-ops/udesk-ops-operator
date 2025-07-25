@@ -27,12 +27,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/strategy"
-	internalTypes "udesk.cn/ops/internal/types"
 )
 
 var _ = Describe("ScaleNotifyConfig Controller", func() {
@@ -62,10 +59,6 @@ var _ = Describe("ScaleNotifyConfig Controller", func() {
 			Scheme: scheme,
 		}
 
-		// 重置全局状态
-		hasDefaultNotifyClient = make(map[string]bool)
-		strategy.DefaultNotifyClient = nil
-
 		resourceName = "test-config"
 		namespacedName = types.NamespacedName{
 			Name:      resourceName,
@@ -80,181 +73,6 @@ var _ = Describe("ScaleNotifyConfig Controller", func() {
 				NamespacedName: namespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should reconcile valid default WXWorkRobot config successfully", func() {
-			// 由于当前controller实现未完整解析config数据，我们测试基本逻辑流程
-			// 创建配置时状态为Pending，这样不会触发验证
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    internalTypes.NotifyTypeWXWorkRobot,
-					Default: true,
-					Config: runtime.RawExtension{
-						Raw: []byte(`{"webhookURL":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test"}`),
-					},
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusPending, // 使用Pending状态
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 由于状态为Pending，不会设置默认客户端
-			Expect(hasDefaultNotifyClient[internalTypes.NotifyTypeWXWorkRobot]).To(BeFalse())
-		})
-
-		It("should reconcile valid default Email config successfully", func() {
-			// 由于当前controller实现未完整解析config数据，我们测试基本逻辑流程
-			// 创建配置时状态为Pending，这样不会触发验证
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    internalTypes.NotifyTypeEmail,
-					Default: true,
-					Config: runtime.RawExtension{
-						Raw: []byte(`{"smtpServer":"smtp.example.com","smtpPort":587,"smtpUser":"user","smtpPassword":"pass","fromEmail":"test@example.com","toEmail":"recipient@example.com"}`),
-					},
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusPending, // 使用Pending状态
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 由于状态为Pending，不会设置默认客户端
-			Expect(hasDefaultNotifyClient[internalTypes.NotifyTypeEmail]).To(BeFalse())
-		})
-
-		It("should handle unsupported notification type", func() {
-			// 创建不支持类型的配置
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    "UnsupportedType",
-					Default: true,
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusValid,
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 验证默认客户端未设置（因为类型不支持）
-			Expect(hasDefaultNotifyClient["UnsupportedType"]).To(BeFalse())
-			Expect(strategy.DefaultNotifyClient).To(BeNil())
-		})
-
-		It("should not process non-default configs", func() {
-			// 创建非默认配置
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    internalTypes.NotifyTypeWXWorkRobot,
-					Default: false, // 非默认配置
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusValid,
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 验证默认客户端未设置
-			Expect(hasDefaultNotifyClient[internalTypes.NotifyTypeWXWorkRobot]).To(BeFalse())
-			Expect(strategy.DefaultNotifyClient).To(BeNil())
-		})
-
-		It("should not process configs with invalid status", func() {
-			// 创建状态为Invalid的配置
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    internalTypes.NotifyTypeWXWorkRobot,
-					Default: true,
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusInvalid, // 无效状态
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 验证默认客户端未设置
-			Expect(hasDefaultNotifyClient[internalTypes.NotifyTypeWXWorkRobot]).To(BeFalse())
-			Expect(strategy.DefaultNotifyClient).To(BeNil())
-		})
-
-		It("should skip setup when default client already exists", func() {
-			// 先设置hasDefaultNotifyClient标记
-			hasDefaultNotifyClient[internalTypes.NotifyTypeWXWorkRobot] = true
-
-			config := &opsv1beta1.ScaleNotifyConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: opsv1beta1.ScaleNotifyConfigSpec{
-					Type:    internalTypes.NotifyTypeWXWorkRobot,
-					Default: true,
-				},
-				Status: opsv1beta1.ScaleNotifyConfigStatus{
-					ValidationStatus: internalTypes.ValidationStatusValid,
-				},
-			}
-
-			Expect(fakeClient.Create(ctx, config)).To(Succeed())
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: namespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// 验证仍然保持已存在状态
-			Expect(hasDefaultNotifyClient[internalTypes.NotifyTypeWXWorkRobot]).To(BeTrue())
 		})
 	})
 

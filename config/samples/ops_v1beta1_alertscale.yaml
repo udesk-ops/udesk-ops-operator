@@ -1,12 +1,13 @@
 apiVersion: ops.udesk.cn/v1beta1
 kind: AlertScale
 metadata:
-  name: example-alertscale-003
+  name: example-alertscale-006
   namespace: default
 spec:
   scaleDuration: 1m
-  scaleNotificationType: email
+  scaleNotificationType: WXWorkRobot
   scaleReason: High CPU Usage
+  scaleAutoApproval: true
   scaleTarget:
     apiVersion: apps/v1
     kind: Deployment
