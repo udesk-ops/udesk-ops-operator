@@ -143,8 +143,6 @@ type ScalingHandler struct{}
 func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 	log.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
-	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
-	defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation started for AlertScale: "+ctx.AlertScale.Name)
 	// 使用策略进行扩缩容
 	if err := h.scaleIfNeeded(ctx); err != nil {
 		return ctrl.Result{}, err

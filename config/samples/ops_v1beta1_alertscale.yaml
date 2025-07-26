@@ -1,7 +1,7 @@
 apiVersion: ops.udesk.cn/v1beta1
 kind: AlertScale
 metadata:
-  name: example-alertscale-006
+  name: example-alertscale-011
   namespace: default
 spec:
   scaleDuration: 1m
