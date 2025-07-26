@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -232,7 +233,7 @@ func TestScaleStrategyInterface(t *testing.T) {
 
 func TestStateHandlerInterface(t *testing.T) {
 	handler := &mockStateHandler{
-		handleResult: ctrl.Result{Requeue: true},
+		handleResult: ctrl.Result{RequeueAfter: time.Second},
 		canTransitionFunc: func(toState string) bool {
 			return toState == ScaleStatusScaling
 		},
@@ -244,8 +245,9 @@ func TestStateHandlerInterface(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error from Handle, got %v", err)
 	}
-	if !result.Requeue {
-		t.Errorf("Expected result.Requeue to be true")
+
+	if result.RequeueAfter != time.Second {
+		t.Errorf("Expected result.RequeueAfter to be 1 second, got %v", result.RequeueAfter)
 	}
 
 	// Test CanTransition method
