@@ -153,7 +153,10 @@ var _ = Describe("AlertScale Controller", func() {
 			if err == nil {
 				// Clean up if created
 				defer func() {
-					k8sClient.Delete(ctx, invalidAlertScale)
+					if deleteErr := k8sClient.Delete(ctx, invalidAlertScale); deleteErr != nil {
+						// Log error if needed, but don't fail test
+						GinkgoWriter.Printf("Warning: failed to clean up test resource: %v\n", deleteErr)
+					}
 				}()
 			}
 			// Just verify we can handle the creation attempt

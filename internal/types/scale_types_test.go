@@ -85,7 +85,7 @@ func TestScaleContext(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = opsv1beta1.AddToScheme(s)
 	_ = scheme.AddToScheme(s)
-	client := fake.NewClientBuilder().WithScheme(s).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(s).Build()
 
 	alertScale := &opsv1beta1.AlertScale{
 		ObjectMeta: metav1.ObjectMeta{
@@ -108,7 +108,7 @@ func TestScaleContext(t *testing.T) {
 
 	scaleContext := &ScaleContext{
 		Context:       ctx,
-		Client:        client,
+		Client:        fakeClient,
 		AlertScale:    alertScale,
 		Request:       request,
 		ScaleStrategy: scaleStrategy,
@@ -198,7 +198,7 @@ func TestScaleStrategyInterface(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	_ = opsv1beta1.AddToScheme(s)
-	client := fake.NewClientBuilder().WithScheme(s).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(s).Build()
 
 	target := &opsv1beta1.ScaleTarget{
 		Kind: "Deployment",
@@ -206,13 +206,13 @@ func TestScaleStrategyInterface(t *testing.T) {
 	}
 
 	// Test Scale method
-	err := strategy.Scale(ctx, client, target, 5)
+	err := strategy.Scale(ctx, fakeClient, target, 5)
 	if err != nil {
 		t.Errorf("Expected no error from Scale, got %v", err)
 	}
 
 	// Test GetCurrentReplicas method
-	replicas, err := strategy.GetCurrentReplicas(ctx, client, target)
+	replicas, err := strategy.GetCurrentReplicas(ctx, fakeClient, target)
 	if err != nil {
 		t.Errorf("Expected no error from GetCurrentReplicas, got %v", err)
 	}
@@ -221,7 +221,7 @@ func TestScaleStrategyInterface(t *testing.T) {
 	}
 
 	// Test GetAvailableReplicas method
-	availableReplicas, err := strategy.GetAvailableReplicas(ctx, client, target)
+	availableReplicas, err := strategy.GetAvailableReplicas(ctx, fakeClient, target)
 	if err != nil {
 		t.Errorf("Expected no error from GetAvailableReplicas, got %v", err)
 	}

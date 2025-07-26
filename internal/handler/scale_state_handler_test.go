@@ -4,21 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 	"udesk.cn/ops/internal/types"
 )
-
-func setupTestClient() client.Client {
-	s := runtime.NewScheme()
-	_ = opsv1beta1.AddToScheme(s)
-	_ = scheme.AddToScheme(s)
-	return fake.NewClientBuilder().WithScheme(s).Build()
-}
 
 func TestParseDuration(t *testing.T) {
 	tests := []struct {

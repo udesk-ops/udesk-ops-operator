@@ -34,6 +34,8 @@ const (
 
 	certmanagerVersion = "v1.16.3"
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
+
+	localEnvValue = "true"
 )
 
 func warnError(err error) {
@@ -44,7 +46,9 @@ func warnError(err error) {
 func Run(cmd *exec.Cmd) (string, error) {
 	dir, _ := GetProjectDir()
 	cmd.Dir = dir
-	fmt.Fprintf(GinkgoWriter, "running command in dir: %q\n", cmd.Dir)
+	if _, err := fmt.Fprintf(GinkgoWriter, "running command in dir: %q\n", cmd.Dir); err != nil {
+		warnError(err)
+	}
 	if err := os.Chdir(cmd.Dir); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", err)
 	}
@@ -64,7 +68,7 @@ func Run(cmd *exec.Cmd) (string, error) {
 func InstallPrometheusOperator() error {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	// 本地环境 需要使用本地的 prometheus operator yaml 文件, 判断是否是本地环境
-	if os.Getenv("LOCAL_ENV") == "true" {
+	if os.Getenv("LOCAL_ENV") == localEnvValue {
 		url = "config/samples/promethus.yaml"
 	}
 	cmd := exec.Command("kubectl", "apply", "-f", url)
@@ -76,7 +80,7 @@ func InstallPrometheusOperator() error {
 func UninstallPrometheusOperator() {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	// 本地环境 需要使用本地的 prometheus operator yaml 文件, 判断是否是本地环境
-	if os.Getenv("LOCAL_ENV") == "true" {
+	if os.Getenv("LOCAL_ENV") == localEnvValue {
 		url = "config/samples/promethus.yaml"
 	}
 	cmd := exec.Command("kubectl", "delete", "-f", url)
@@ -116,7 +120,7 @@ func IsPrometheusCRDsInstalled() bool {
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	// 本地环境 需要使用本地的 cert-manager yaml 文件, 判断是否是本地环境
-	if os.Getenv("LOCAL_ENV") == "true" {
+	if os.Getenv("LOCAL_ENV") == localEnvValue {
 		url = "config/samples/cert-manager.yaml"
 	}
 
@@ -130,7 +134,7 @@ func UninstallCertManager() {
 func InstallCertManager() error {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	// 本地环境 需要使用本地的 cert-manager yaml 文件, 判断是否是本地环境
-	if os.Getenv("LOCAL_ENV") == "true" {
+	if os.Getenv("LOCAL_ENV") == localEnvValue {
 		url = "config/samples/cert-manager.yaml"
 	}
 	cmd := exec.Command("kubectl", "apply", "-f", url)
@@ -197,7 +201,7 @@ func LoadImageToKindClusterWithName(name string) error {
 	}
 
 	// if in local environment, load additional images
-	if os.Getenv("LOCAL_ENV") == "true" {
+	if os.Getenv("LOCAL_ENV") == localEnvValue {
 		return loadAdditionalImagesToKindCluster(cluster)
 	}
 	return nil

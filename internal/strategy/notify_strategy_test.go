@@ -215,7 +215,9 @@ func TestWXWorkRobotNotificationClient_SendNotify(t *testing.T) {
 			if tt.client.WebhookURL != "" {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(tt.mockStatusCode)
-					w.Write([]byte(tt.mockResponse))
+					if _, err := w.Write([]byte(tt.mockResponse)); err != nil {
+						t.Errorf("Failed to write response: %v", err)
+					}
 				}))
 				defer server.Close()
 				tt.client.WebhookURL = server.URL
