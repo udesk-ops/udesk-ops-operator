@@ -29,10 +29,11 @@ import (
 
 const (
 	prometheusOperatorVersion = "v0.77.1"
-	prometheusOperatorURL     = "promethus.yaml"
+	prometheusOperatorURL     = "https://github.com/prometheus-operator/prometheus-operator/" +
+		"releases/download/%s/bundle.yaml"
 
 	certmanagerVersion = "v1.16.3"
-	certmanagerURLTmpl = "cert-manager.yaml"
+	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
 )
 
 func warnError(err error) {
@@ -61,16 +62,24 @@ func Run(cmd *exec.Cmd) (string, error) {
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 func InstallPrometheusOperator() error {
-	// url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "create", "-f", "config/samples/promethus.yaml")
+	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
+	// 本地环境 需要使用本地的 prometheus operator yaml 文件, 判断是否是本地环境
+	if os.Getenv("LOCAL_ENV") == "true" {
+		url = "config/samples/promethus.yaml"
+	}
+	cmd := exec.Command("kubectl", "apply", "-f", url)
 	_, err := Run(cmd)
 	return err
 }
 
 // UninstallPrometheusOperator uninstalls the prometheus
 func UninstallPrometheusOperator() {
-	// url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", "config/samples/promethus.yaml")
+	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
+	// 本地环境 需要使用本地的 prometheus operator yaml 文件, 判断是否是本地环境
+	if os.Getenv("LOCAL_ENV") == "true" {
+		url = "config/samples/promethus.yaml"
+	}
+	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -105,8 +114,13 @@ func IsPrometheusCRDsInstalled() bool {
 
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
-	// url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", "config/samples/cert-manager.yaml")
+	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
+	// 本地环境 需要使用本地的 cert-manager yaml 文件, 判断是否是本地环境
+	if os.Getenv("LOCAL_ENV") == "true" {
+		url = "config/samples/cert-manager.yaml"
+	}
+
+	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -114,8 +128,12 @@ func UninstallCertManager() {
 
 // InstallCertManager installs the cert manager bundle.
 func InstallCertManager() error {
-	// url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "apply", "-f", "config/samples/cert-manager.yaml")
+	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
+	// 本地环境 需要使用本地的 cert-manager yaml 文件, 判断是否是本地环境
+	if os.Getenv("LOCAL_ENV") == "true" {
+		url = "config/samples/cert-manager.yaml"
+	}
+	cmd := exec.Command("kubectl", "apply", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
@@ -178,9 +196,17 @@ func LoadImageToKindClusterWithName(name string) error {
 		return fmt.Errorf("failed to load image %q to kind cluster %q: %w", name, cluster, err)
 	}
 
-	kindOptions = []string{"load", "docker-image", "quay.io/jetstack/cert-manager-controller:v1.16.3", "--name", cluster}
-	cmd = exec.Command("kind", kindOptions...)
-	_, err = Run(cmd)
+	// if in local environment, load additional images
+	if os.Getenv("LOCAL_ENV") == "true" {
+		return loadAdditionalImagesToKindCluster(cluster)
+	}
+	return nil
+}
+
+func loadAdditionalImagesToKindCluster(cluster string) error {
+	kindOptions := []string{"load", "docker-image", "quay.io/jetstack/cert-manager-controller:v1.16.3", "--name", cluster}
+	cmd := exec.Command("kind", kindOptions...)
+	_, err := Run(cmd)
 
 	if err != nil {
 		return fmt.Errorf("failed to load cert-manager-controller image to kind cluster %q: %w", cluster, err)
@@ -209,7 +235,6 @@ func LoadImageToKindClusterWithName(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load curl image to kind cluster %q: %w", cluster, err)
 	}
-
 	return nil
 }
 
