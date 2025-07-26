@@ -97,14 +97,12 @@ metadata:
   name: wxwork-notify
   namespace: default
 spec:
-  notificationType: WXWorkRobot
-  isDefault: true
-  config: |
-    {
-      "webhookURL": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-key",
-      "secret": "your-secret",
-      "messageTemplate": "{{.AlertName}} 扩缩容操作：{{.Status}} 时间：{{.Timestamp}}"
-    }
+  type: WXWorkRobot
+  default: true
+  config:
+    webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-key"
+    secret: "your-secret"
+    messageTemplate: "{{.AlertName}} 扩缩容操作：{{.Status}} 时间：{{.Timestamp}}"
 ```
 
 创建邮件通知配置：
@@ -116,18 +114,16 @@ metadata:
   name: email-notify
   namespace: default
 spec:
-  notificationType: Email
-  config: |
-    {
-      "smtpServer": "smtp.example.com",
-      "smtpPort": 587,
-      "fromEmail": "alerts@example.com",
-      "toEmails": ["admin@example.com", "ops@example.com"],
-      "username": "alerts@example.com",
-      "password": "your-password",
-      "subject": "扩缩容通知",
-      "messageTemplate": "应用 {{.AlertName}} 扩缩容状态更新为：{{.Status}}"
-    }
+  type: Email
+  config:
+    smtpServer: "smtp.example.com"
+    smtpPort: 587
+    fromEmail: "alerts@example.com"
+    toEmails: ["admin@example.com", "ops@example.com"]
+    username: "alerts@example.com"
+    password: "your-password"
+    subject: "扩缩容通知"
+    messageTemplate: "应用 {{.AlertName}} 扩缩容状态更新为：{{.Status}}"
 ```
 
 #### 3. 创建扩缩容任务
@@ -139,16 +135,16 @@ metadata:
   name: webapp-scale
   namespace: default
 spec:
+  scaleReason: "应对高流量扩容"
   scaleTarget:
     kind: Deployment
     name: webapp
     namespace: default
-  scaleReplicas: 5
+  scaleThreshold: 5
   scaleDuration: "30m"
   scaleAutoApproval: false
   scaleTimeout: "10m"
   scaleNotificationType: WXWorkRobot
-  scaleDescription: "应对高流量扩容"
 ```
 
 ### 本地开发
@@ -177,31 +173,53 @@ AlertScale 是扩缩容操作的核心资源，定义了完整的扩缩容配置
 
 | 字段 | 类型 | 必需 | 描述 |
 |------|------|------|------|
+| `scaleReason` | `string` | ✅ | 扩缩容原因，如 "高 CPU 使用率" |
 | `scaleTarget` | `ScaleTarget` | ✅ | 扩缩容目标对象 |
-| `scaleReplicas` | `int32` | ✅ | 目标副本数 |
-| `scaleDuration` | `string` | ✅ | 扩缩容持续时间 |
-| `scaleAutoApproval` | `bool` | ❌ | 是否自动审批 |
-| `scaleTimeout` | `string` | ❌ | 审批超时时间 |
-| `scaleNotificationType` | `string` | ❌ | 通知类型 |
-| `scaleDescription` | `string` | ❌ | 操作描述 |
+| `scaleThreshold` | `int32` | ❌ | 扩缩容阈值 (0-100) |
+| `scaleDuration` | `string` | ❌ | 扩缩容持续时间，格式：数字+单位(s/m/h/d/w) |
+| `scaleAutoApproval` | `bool` | ❌ | 是否自动审批，默认 false |
+| `scaleTimeout` | `string` | ❌ | 审批超时时间，格式：数字+单位(s/m/h/d/w) |
+| `scaleNotificationType` | `string` | ❌ | 通知类型 (`WXWorkRobot`, `Email`) |
 
 #### Status 字段
 
 | 字段 | 类型 | 描述 |
 |------|------|------|
-| `status` | `string` | 当前状态 |
-| `scaleBeginTime` | `metav1.Time` | 开始时间 |
-| `scaleEndTime` | `metav1.Time` | 结束时间 |
-| `currentReplicas` | `int32` | 当前副本数 |
-| `message` | `string` | 状态消息 |
+| `scaleStatus.status` | `string` | 当前状态 |
+| `scaleStatus.scaleBeginTime` | `metav1.Time` | 开始时间 |
+| `scaleStatus.scaleEndTime` | `metav1.Time` | 结束时间 |
+| `scaleStatus.originReplicas` | `int32` | 原始副本数 |
+| `scaleStatus.scaledReplicas` | `int32` | 扩缩容后副本数 |
 
 #### 状态流转
 
 ```
-Pending → Approvaling → Approved → Scaling → Scaled → Completed
-    ↓           ↓
- Failed     Rejected
+Pending → Approvaling → Approved → Scaling → Scaled → Completed → Archived
+    ↓           ↓                      ↓
+ Failed     Rejected                Failed
 ```
+
+**详细状态说明**：
+- **Pending**: 初始状态，获取原始副本数并转换到审批状态
+- **Approvaling**: 等待审批状态，根据 `scaleAutoApproval` 决定自动批准或等待手动审批
+- **Approved**: 已审批，准备开始扩缩容操作
+- **Rejected**: 审批被拒绝或审批超时
+- **Scaling**: 正在执行扩缩容操作
+- **Scaled**: 扩缩容完成，等待指定的持续时间结束
+- **Completed**: 持续时间结束，准备归档或清理
+- **Failed**: 操作在任何阶段失败
+- **Archived**: 已归档，生命周期结束
+
+### ScaleTarget 字段
+
+ScaleTarget 定义扩缩容的目标资源：
+
+| 字段 | 类型 | 必需 | 描述 |
+|------|------|------|------|
+| `name` | `string` | ✅ | 目标资源名称 |
+| `namespace` | `string` | ❌ | 目标资源命名空间 |
+| `kind` | `string` | ✅ | 资源类型 (`Deployment`, `StatefulSet`) |
+| `apiVersion` | `string` | ❌ | API 版本，如 `apps/v1` |
 
 ### ScaleNotifyConfig CRD
 
@@ -211,33 +229,37 @@ ScaleNotifyConfig 定义通知配置，支持多种通知渠道。
 
 | 字段 | 类型 | 必需 | 描述 |
 |------|------|------|------|
-| `notificationType` | `string` | ✅ | 通知类型 (`WXWorkRobot`, `Email`) |
-| `config` | `string` | ✅ | JSON 格式的配置 |
-| `isDefault` | `bool` | ❌ | 是否为默认配置 |
+| `type` | `string` | ✅ | 通知类型 (`WXWorkRobot`, `Email`) |
+| `config` | `runtime.RawExtension` | ❌ | JSON 格式的配置对象 |
+| `default` | `bool` | ✅ | 是否为默认配置，默认 false |
+
+#### Status 字段
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `validationStatus` | `string` | 配置验证状态 (`Valid`, `Invalid`, `Pending`) |
 
 #### 通知类型配置
 
 **企业微信机器人 (WXWorkRobot)**:
-```json
-{
-  "webhookURL": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx",
-  "secret": "SEC-xxx",
-  "messageTemplate": "{{.AlertName}} 状态: {{.Status}}"
-}
+```yaml
+config:
+  webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+  secret: "SEC-xxx"
+  messageTemplate: "{{.AlertName}} 状态: {{.Status}}"
 ```
 
 **邮件通知 (Email)**:
-```json
-{
-  "smtpServer": "smtp.example.com",
-  "smtpPort": 587,
-  "fromEmail": "alerts@example.com", 
-  "toEmails": ["admin@example.com"],
-  "username": "alerts@example.com",
-  "password": "password",
-  "subject": "扩缩容通知",
-  "messageTemplate": "{{.AlertName}} 状态: {{.Status}}"
-}
+```yaml
+config:
+  smtpServer: "smtp.example.com"
+  smtpPort: 587
+  fromEmail: "alerts@example.com"
+  toEmails: ["admin@example.com"]
+  username: "alerts@example.com"
+  password: "password"
+  subject: "扩缩容通知"
+  messageTemplate: "{{.AlertName}} 状态: {{.Status}}"
 ```
 
 ## 监控和日志
