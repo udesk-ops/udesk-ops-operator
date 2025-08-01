@@ -2,4 +2,5 @@
 resources:
 - ops_v1beta1_alertscale.yaml
 - ops_v1beta1_scalenotifyconfig.yaml
+- ops_v1beta1_scalenotifymsgtemplate.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

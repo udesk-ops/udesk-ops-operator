@@ -1,0 +1,79 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: scalenotifymsgtemplates.ops.udesk.cn
+spec:
+  group: ops.udesk.cn
+  names:
+    kind: ScaleNotifyMsgTemplate
+    listKind: ScaleNotifyMsgTemplateList
+    plural: scalenotifymsgtemplates
+    singular: scalenotifymsgtemplate
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ScaleNotifyMsgTemplate is the Schema for the scalenotifymsgtemplates
+          API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ScaleNotifyMsgTemplateSpec defines the desired state of ScaleNotifyMsgTemplate.
+            properties:
+              content:
+                description: |-
+                  Content is the message content template. go templates can be used to format the content.
+                  where the value must be a string with a minimum length of 1 and a maximum length of 5000 characters.
+                  Example: "Scale notification: {{.ScaleName}}
+                maxLength: 5000
+                minLength: 1
+                type: string
+              title:
+                description: |-
+                  Title is the message title template.
+                  where the value must be a string with a minimum length of 1 and a maximum length of 255 characters.
+                maxLength: 255
+                minLength: 1
+                type: string
+            required:
+            - content
+            - title
+            type: object
+          status:
+            description: ScaleNotifyMsgTemplateStatus defines the observed state of
+              ScaleNotifyMsgTemplate.
+            properties:
+              validationStatus:
+                description: ValidationStatus indicates the validation status of the
+                  message template.
+                enum:
+                - Valid
+                - Invalid
+                - Pending
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

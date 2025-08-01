@@ -112,11 +112,10 @@ func TestWXWorkRobotNotificationClient_Validate(t *testing.T) {
 		{
 			name: "Valid configuration with optional fields",
 			client: &WXWorkRobotNotificationClient{
-				WebhookURL:      "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
-				Secret:          "secret123",
-				MessageTemplate: "Alert: {{.Message}}",
-				AtUsers:         []string{"user1", "user2"},
-				AtAll:           true,
+				WebhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
+				Secret:     "secret123",
+				AtUsers:    []string{"user1", "user2"},
+				AtAll:      true,
 			},
 			expectError: false,
 		},
@@ -167,8 +166,7 @@ func TestWXWorkRobotNotificationClient_SendNotify(t *testing.T) {
 		{
 			name: "Successful notification with template",
 			client: &WXWorkRobotNotificationClient{
-				WebhookURL:      "test-url",
-				MessageTemplate: "Alert: {{.Message}} at {{.Time}}",
+				WebhookURL: "test-url",
 			},
 			message:        "Test message",
 			mockResponse:   `{"errcode": 0, "errmsg": "ok"}`,
@@ -372,18 +370,16 @@ func TestNewWXWorkRobotNotificationClient(t *testing.T) {
 				Raw: []byte(`{
 					"webhookURL": "https://example.com/webhook",
 					"secret": "test-secret",
-					"messageTemplate": "Alert: {{.Message}}",
 					"atUsers": ["user1", "user2"],
 					"atAll": true
 				}`),
 			},
 			expectError: false,
 			expected: &WXWorkRobotNotificationClient{
-				WebhookURL:      "https://example.com/webhook",
-				Secret:          "test-secret",
-				MessageTemplate: "Alert: {{.Message}}",
-				AtUsers:         []string{"user1", "user2"},
-				AtAll:           true,
+				WebhookURL: "https://example.com/webhook",
+				Secret:     "test-secret",
+				AtUsers:    []string{"user1", "user2"},
+				AtAll:      true,
 			},
 		},
 		{
@@ -423,9 +419,6 @@ func TestNewWXWorkRobotNotificationClient(t *testing.T) {
 			if client.Secret != tt.expected.Secret {
 				t.Errorf("Expected Secret %s, got %s", tt.expected.Secret, client.Secret)
 			}
-			if client.MessageTemplate != tt.expected.MessageTemplate {
-				t.Errorf("Expected MessageTemplate %s, got %s", tt.expected.MessageTemplate, client.MessageTemplate)
-			}
 		})
 	}
 }
@@ -447,20 +440,18 @@ func TestNewEmailNotificationClient(t *testing.T) {
 					"password": "password123",
 					"fromEmail": "noreply@example.com",
 					"toEmails": ["admin@example.com", "ops@example.com"],
-					"subject": "Test Subject",
-					"messageTemplate": "Message: {{.Message}}"
+					"subject": "Test Subject"
 				}`),
 			},
 			expectError: false,
 			expected: &EmailNotificationClient{
-				SMTPServer:      "smtp.example.com",
-				SMTPPort:        587,
-				Username:        "user@example.com",
-				Password:        "password123",
-				FromEmail:       "noreply@example.com",
-				ToEmails:        []string{"admin@example.com", "ops@example.com"},
-				Subject:         "Test Subject",
-				MessageTemplate: "Message: {{.Message}}",
+				SMTPServer: "smtp.example.com",
+				SMTPPort:   587,
+				Username:   "user@example.com",
+				Password:   "password123",
+				FromEmail:  "noreply@example.com",
+				ToEmails:   []string{"admin@example.com", "ops@example.com"},
+				Subject:    "Test Subject",
 			},
 		},
 		{

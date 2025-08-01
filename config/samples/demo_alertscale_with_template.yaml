@@ -1,0 +1,65 @@
+---
+# First create the message template
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyMsgTemplate
+metadata:
+  name: production-scale-template
+  namespace: default
+spec:
+  title: "生产环境扩缩容通知 - {{.ScaleTarget.Name}}"
+  content: |
+    
+    **目标资源:** {{.ScaleTarget.Kind}}/{{.ScaleTarget.Name}}
+    **命名空间:** {{.ScaleTarget.Namespace}}
+    **操作原因:** {{.ScaleReason}}
+    **原始副本数:** {{.OriginReplicas}}
+    **当前副本数:** {{.ScaledReplicas}}
+    **目标副本数** {{.ScaleThreshold}}
+    **保持时间:** {{.ScaleDuration}}
+    **当前状态:** {{.Status}}
+    **开始时间:** {{.ScaleBeginTime}}
+    {{- if .ScaleEndTime }}
+    **结束时间:** {{.ScaleEndTime}}
+    {{- end}}
+    请及时关注系统资源状态，确保服务稳定运行！
+    ---
+    > 发送时间: {{.Timestamp}}
+    > 操作员: {{.Operator}}
+
+---
+# Then create AlertScale that references the template
+apiVersion: ops.udesk.cn/v1beta1
+kind: AlertScale
+metadata:
+  name: production-nginx-scale
+  namespace: default
+spec:
+  scaleReason: "CPU使用率超过80%，需要扩容保证服务质量"
+  scaleDuration: "3m"
+  scaleNotificationType: "WXWorkRobot"
+  scaleNotifyMsgTemplate: "production-scale-template"  # 引用上面的消息模板
+  scaleAutoApproval: false  # 生产环境需要人工审批
+  scaleTarget:
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+    name: "nginx-deploy"
+    namespace: "default"
+  scaleThreshold: 10
+  scaleTimeout: "5m"
+  
+---
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyConfig
+metadata:
+  labels:
+    app.kubernetes.io/name: udesk-ops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: scalenotifyconfig-wxwork-default
+  namespace: default
+spec:
+  default: true
+  type: WXWorkRobot
+  config:
+    webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=9911e070-e548-4fb8-aad6-f3a43fe1da15"
+    atUsers: ["user1", "user2"]
+    atAll: true

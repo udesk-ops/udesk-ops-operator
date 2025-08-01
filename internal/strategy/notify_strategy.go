@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/smtp"
 	"strings"
-	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,11 +45,10 @@ func NewScaleNotifyClient(name string, config runtime.RawExtension) types.ScaleN
 
 // WXWorkRobotNotificationClient represents the configuration for WeChat Work notifications.
 type WXWorkRobotNotificationClient struct {
-	WebhookURL      string   `json:"webhookURL,omitempty"`
-	Secret          string   `json:"secret,omitempty"`
-	MessageTemplate string   `json:"messageTemplate,omitempty"`
-	AtUsers         []string `json:"atUsers,omitempty"`
-	AtAll           bool     `json:"atAll,omitempty"`
+	WebhookURL string   `json:"webhookURL,omitempty"`
+	Secret     string   `json:"secret,omitempty"`
+	AtUsers    []string `json:"atUsers,omitempty"`
+	AtAll      bool     `json:"atAll,omitempty"`
 }
 
 func NewWXWorkRobotNotificationClient(config runtime.RawExtension) (*WXWorkRobotNotificationClient, error) {
@@ -81,47 +79,18 @@ func (c *WXWorkRobotNotificationClient) SendNotify(ctx context.Context, message 
 	log := logf.FromContext(ctx)
 	log.Info("Sending WeChat Work notification", "webhookURL", c.WebhookURL, "message", message)
 
-	// 构建企业微信机器人消息体
-	var payload map[string]interface{}
-	var content string
-
-	// 如果有消息模板，使用模板；否则使用默认格式
-	if c.MessageTemplate != "" {
-		// 支持 Go 模板语法
-		tmpl, err := template.New("wxwork").Parse(c.MessageTemplate)
-		if err != nil {
-			log.Error(err, "Failed to parse message template")
-			return fmt.Errorf("failed to parse message template: %v", err)
-		}
-
-		// 准备模板数据
-		data := map[string]interface{}{
-			"Message": message,
-			"Time":    time.Now().Format(time.RFC3339),
-		}
-
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
-			log.Error(err, "Failed to execute message template")
-			return fmt.Errorf("failed to execute message template: %v", err)
-		}
-		content = buf.String()
-	} else {
-		content = fmt.Sprintf("🚨 AlertScale Notification\n\n%s", message)
-	}
-
-	payload = map[string]interface{}{
-		"msgtype": "text",
-		"text": map[string]interface{}{
-			"content": content,
+	payload := map[string]interface{}{
+		"msgtype": "markdown",
+		"markdown": map[string]interface{}{
+			"content": message,
 		},
 	}
 
 	// 添加 @ 用户功能
 	if len(c.AtUsers) > 0 || c.AtAll {
-		payload["text"].(map[string]interface{})["mentioned_list"] = c.AtUsers
+		payload["markdown"].(map[string]interface{})["mentioned_list"] = c.AtUsers
 		if c.AtAll {
-			payload["text"].(map[string]interface{})["mentioned_mobile_list"] = []string{"@all"}
+			payload["markdown"].(map[string]interface{})["mentioned_mobile_list"] = []string{"@all"}
 		}
 	}
 
@@ -192,14 +161,13 @@ func (c *WXWorkRobotNotificationClient) SendNotify(ctx context.Context, message 
 
 // EmailNotificationClient represents the configuration for email notifications.
 type EmailNotificationClient struct {
-	SMTPServer      string   `json:"smtpServer,omitempty"`
-	SMTPPort        int32    `json:"smtpPort,omitempty"`
-	Username        string   `json:"username,omitempty"`
-	Password        string   `json:"password,omitempty"`
-	FromEmail       string   `json:"fromEmail,omitempty"`
-	ToEmails        []string `json:"toEmails,omitempty"`
-	Subject         string   `json:"subject,omitempty"`
-	MessageTemplate string   `json:"messageTemplate,omitempty"`
+	SMTPServer string   `json:"smtpServer,omitempty"`
+	SMTPPort   int32    `json:"smtpPort,omitempty"`
+	Username   string   `json:"username,omitempty"`
+	Password   string   `json:"password,omitempty"`
+	FromEmail  string   `json:"fromEmail,omitempty"`
+	ToEmails   []string `json:"toEmails,omitempty"`
+	Subject    string   `json:"subject,omitempty"`
 }
 
 func NewEmailNotificationClient(config runtime.RawExtension) (*EmailNotificationClient, error) {
@@ -251,32 +219,6 @@ func (c *EmailNotificationClient) SendNotify(ctx context.Context, message string
 		subject = "AlertScale Notification"
 	}
 
-	// 构建邮件内容
-	var body string
-	if c.MessageTemplate != "" {
-		// 支持 Go 模板语法
-		tmpl, err := template.New("email").Parse(c.MessageTemplate)
-		if err != nil {
-			log.Error(err, "Failed to parse message template")
-			return fmt.Errorf("failed to parse message template: %v", err)
-		}
-
-		// 准备模板数据
-		data := map[string]interface{}{
-			"Message": message,
-			"Time":    time.Now().Format(time.RFC3339),
-		}
-
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
-			log.Error(err, "Failed to execute message template")
-			return fmt.Errorf("failed to execute message template: %v", err)
-		}
-		body = buf.String()
-	} else {
-		body = fmt.Sprintf("AlertScale Notification\n\n%s\n\nSent at: %s", message, time.Now().Format(time.RFC3339))
-	}
-
 	// 创建 SMTP 认证
 	var auth smtp.Auth
 	if c.Username != "" && c.Password != "" {
@@ -298,7 +240,7 @@ func (c *EmailNotificationClient) SendNotify(ctx context.Context, message string
 		msg.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
 	}
 	msg.WriteString("\r\n")
-	msg.WriteString(body)
+	msg.WriteString(message)
 
 	// 发送邮件
 	addr := fmt.Sprintf("%s:%d", c.SMTPServer, c.SMTPPort)

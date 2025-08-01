@@ -42,6 +42,9 @@ spec:
     - jsonPath: .spec.scaleNotificationType
       name: NotificationType
       type: string
+    - jsonPath: .spec.scaleNotifyMsgTemplate
+      name: MsgTemplate
+      type: string
     - jsonPath: .spec.scaleReason
       name: Reason
       type: string
@@ -88,6 +91,13 @@ spec:
                 enum:
                 - Email
                 - WXWorkRobot
+                type: string
+              scaleNotifyMsgTemplate:
+                description: |-
+                  ScaleNotifyMsgTemplate is the reference to the message template for notifications.
+                  where the value must be a valid Kubernetes resource name.
+                  Example: "my-notification-template"
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                 type: string
               scaleReason:
                 description: |-

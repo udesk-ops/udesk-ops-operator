@@ -120,6 +120,13 @@ type AlertScaleSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Enum=Email;WXWorkRobot
 	ScaleNotificationType string `json:"scaleNotificationType,omitempty"`
+	// ScaleNotifyMsgTemplate is the reference to the message template for notifications.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// where the value must be a valid Kubernetes resource name.
+	// Example: "my-notification-template"
+	ScaleNotifyMsgTemplate string `json:"scaleNotifyMsgTemplate,omitempty"`
 	// ScaleTimeout is the timeout for the scaling operation.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Type=string
@@ -154,6 +161,7 @@ type AlertScaleStatus struct {
 // +kubebuilder:printcolumn:name="Scaled-Duration",type=string,JSONPath=`.spec.scaleDuration`
 // +kubebuilder:printcolumn:name="Threshold",type=integer,JSONPath=`.spec.scaleThreshold`
 // +kubebuilder:printcolumn:name="NotificationType",type=string,JSONPath=`.spec.scaleNotificationType`
+// +kubebuilder:printcolumn:name="MsgTemplate",type=string,JSONPath=`.spec.scaleNotifyMsgTemplate`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.spec.scaleReason`
 // AlertScale is the Schema for the alertscales API.
 type AlertScale struct {

@@ -247,6 +247,13 @@ func main() {
 	} else {
 		setupLog.Info("Webhooks disabled by ENABLE_WEBHOOKS environment variable")
 	}
+	if err := (&controller.ScaleNotifyMsgTemplateReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScaleNotifyMsgTemplate")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

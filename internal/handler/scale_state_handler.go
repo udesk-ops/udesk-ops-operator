@@ -7,7 +7,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/strategy"
 	"udesk.cn/ops/internal/types"
 )
 
@@ -50,6 +49,14 @@ func (h *ApprovalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error
 				log.Error(err, "Failed to update status to Rejected")
 				return ctrl.Result{}, err
 			}
+
+			// 发送拒绝通知
+			notificationService := NewNotificationService(ctx.Client)
+			if err := notificationService.SendNotification(ctx.Context, ctx, "rejected"); err != nil {
+				log.Error(err, "Failed to send notification for rejected scaling")
+				// 不因为通知失败而中断流程
+			}
+
 			return ctrl.Result{}, nil
 		}
 	}
@@ -74,16 +81,14 @@ func (h *ApprovedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		log.Error(err, "Failed to update status to Scaling")
 		return ctrl.Result{}, err
 	}
+
 	// 发送通知
-	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
-	if defaultNotifyClient != nil {
-		if err := defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation approved for AlertScale: "+ctx.AlertScale.Name); err != nil {
-			log.Error(err, "Failed to send notification for approved scaling")
-			return ctrl.Result{}, err
-		}
-	} else {
-		log.Info("No default notification client found for approved scaling")
+	notificationService := NewNotificationService(ctx.Client)
+	if err := notificationService.SendNotification(ctx.Context, ctx, "approved"); err != nil {
+		log.Error(err, "Failed to send notification for approved scaling")
+		// 不因为通知失败而中断流程
 	}
+
 	// 返回结果，继续处理 Scaling 状态
 	log.Info("Transitioning to Scaling state for AlertScale", "alertScale", ctx.AlertScale.Name)
 	return ctrl.Result{Requeue: true}, nil
@@ -111,6 +116,7 @@ func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	}
 	status := &ctx.AlertScale.Status.ScaleStatus
 	status.OriginReplicas = originReplicas
+	status.ScaledReplicas = originReplicas // 初始化为原始副本数
 	status.Status = types.ScaleStatusApprovaling
 
 	if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
@@ -119,15 +125,12 @@ func (h *PendingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	}
 
 	// 发送通知
-	defaultNotifyClient := strategy.DefaultNotifyClientMap[ctx.AlertScale.Spec.ScaleNotificationType]
-	if defaultNotifyClient != nil {
-		if err := defaultNotifyClient.SendNotify(ctx.Context, "Scaling operation pending for AlertScale: "+ctx.AlertScale.Name); err != nil {
-			log.Error(err, "Failed to send notification for pending scaling")
-			return ctrl.Result{}, err
-		}
-	} else {
-		log.Info("No default notification client found for pending scaling")
+	notificationService := NewNotificationService(ctx.Client)
+	if err := notificationService.SendNotification(ctx.Context, ctx, "pending"); err != nil {
+		log.Error(err, "Failed to send notification for pending scaling")
+		// 不因为通知失败而中断流程
 	}
+
 	log.Info("Transitioning to Approvaling state for AlertScale", "alertScale", ctx.AlertScale.Name)
 	// 返回结果，继续处理 Approvaling 状态
 	return ctrl.Result{Requeue: true}, nil
@@ -143,6 +146,7 @@ type ScalingHandler struct{}
 func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 	log.Info("Handling Scaling state", "alertScale", ctx.AlertScale.Name)
+
 	// 使用策略进行扩缩容
 	if err := h.scaleIfNeeded(ctx); err != nil {
 		return ctrl.Result{}, err
@@ -162,6 +166,13 @@ func (h *ScalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		status.Status = types.ScaleStatusScaled
 		status.ScaleBeginTime = metav1.Now()
 		status.ScaleEndTime = metav1.NewTime(status.ScaleBeginTime.Add(duration))
+
+		// 发送扩缩容完成通知
+		notificationService := NewNotificationService(ctx.Client)
+		if err := notificationService.SendNotification(ctx.Context, ctx, "scaled"); err != nil {
+			log.Error(err, "Failed to send notification for scaled state")
+			// 不因为通知失败而中断流程
+		}
 	}
 
 	// 检查是否超时
@@ -247,6 +258,14 @@ func (h *ScaledHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		// 发送扩缩容完成通知
+		notificationService := NewNotificationService(ctx.Client)
+		if err := notificationService.SendNotification(ctx.Context, ctx, "completed"); err != nil {
+			log.Error(err, "Failed to send notification for completed scaling")
+			// 不因为通知失败而中断流程
+		}
+
 		return ctrl.Result{Requeue: true}, nil
 	}
 
@@ -286,6 +305,14 @@ func (h *CompletedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) 
 		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		// 发送归档通知
+		notificationService := NewNotificationService(ctx.Client)
+		if err := notificationService.SendNotification(ctx.Context, ctx, "archived"); err != nil {
+			log.Error(err, "Failed to send notification for archived scaling")
+			// 不因为通知失败而中断流程
+		}
+
 		return ctrl.Result{Requeue: true}, nil
 	}
 
@@ -312,6 +339,14 @@ type FailedHandler struct{}
 func (h *FailedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 	log.Info("Handling Failed state", "alertScale", ctx.AlertScale.Name)
+
+	// 发送失败通知
+	notificationService := NewNotificationService(ctx.Client)
+	if err := notificationService.SendNotification(ctx.Context, ctx, "failed"); err != nil {
+		log.Error(err, "Failed to send notification for failed scaling")
+		// 不因为通知失败而中断流程
+	}
+
 	// 如果副本数 和原始副本数不一致，恢复原始副本数
 	availableReplicas, err := ctx.ScaleStrategy.GetAvailableReplicas(
 		ctx.Context,
