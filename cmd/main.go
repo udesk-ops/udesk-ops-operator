@@ -39,6 +39,7 @@ import (
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 	"udesk.cn/ops/internal/controller"
+	server "udesk.cn/ops/internal/server"
 	webhookv1beta1 "udesk.cn/ops/internal/webhook/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -64,6 +65,8 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableAPIServer bool
+	var apiAddr string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -82,6 +85,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableAPIServer, "enable-api-server", false,
+		"If set, the API server will be enabled for external access")
+	flag.StringVar(&apiAddr, "api-addr", ":8088",
+		"The address the API server binds to.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -279,6 +286,20 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+
+	// Start API server if enabled
+	if enableAPIServer {
+		setupLog.Info("Starting API server", "address", apiAddr)
+		apiServer := server.NewAPIServer(mgr.GetClient(), apiAddr)
+
+		// Start API server in a goroutine
+		ctx := ctrl.SetupSignalHandler()
+		go func() {
+			if err := apiServer.Start(ctx); err != nil {
+				setupLog.Error(err, "problem running API server")
+			}
+		}()
 	}
 
 	setupLog.Info("starting manager")

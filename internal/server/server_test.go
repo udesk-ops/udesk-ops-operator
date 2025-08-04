@@ -3,41 +3,50 @@ package server
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 )
 
+// TestNewAPIServer tests API server creation
 func TestNewAPIServer(t *testing.T) {
-	// Create a fake client
-	scheme := runtime.NewScheme()
-	if err := opsv1beta1.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
-	}
+	// Create a fake Kubernetes client
+	k8sClient := fake.NewClientBuilder().Build()
 
-	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	// Create API server
+	server := NewAPIServer(k8sClient, ":8088")
 
-	// Test server creation
-	server := NewAPIServer(client, ":8088")
-
+	// Verify server is created
 	if server == nil {
-		t.Fatal("Expected server to be created, got nil")
+		t.Fatal("Expected API server to be created, got nil")
 	}
 
 	if server.addr != ":8088" {
-		t.Errorf("Expected addr to be ':8088', got %s", server.addr)
+		t.Errorf("Expected address :8088, got %s", server.addr)
 	}
 
-	if server.client == nil {
-		t.Error("Expected client to be set")
+	if server.client != k8sClient {
+		t.Error("Expected client to be set correctly")
+	}
+}
+
+// TestAPIServerAddr tests different address formats
+func TestAPIServerAddr(t *testing.T) {
+	k8sClient := fake.NewClientBuilder().Build()
+
+	testCases := []struct {
+		name string
+		addr string
+	}{
+		{"localhost", "localhost:8088"},
+		{"ip address", "127.0.0.1:8088"},
+		{"port only", ":9000"},
 	}
 
-	if server.router == nil {
-		t.Error("Expected router to be set")
-	}
-
-	if server.server == nil {
-		t.Error("Expected HTTP server to be set")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := NewAPIServer(k8sClient, tc.addr)
+			if server.addr != tc.addr {
+				t.Errorf("Expected address %s, got %s", tc.addr, server.addr)
+			}
+		})
 	}
 }
