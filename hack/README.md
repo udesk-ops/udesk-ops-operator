@@ -17,28 +17,28 @@
 **使用方法:**
 ```bash
 # 查看帮助
-./scripts/api_approval_script.sh help
+./hack/api_approval_script.sh help
 
 # 检查API健康状态
-./scripts/api_approval_script.sh health
+./hack/api_approval_script.sh health
 
 # 列出所有AlertScale
-./scripts/api_approval_script.sh list
+./hack/api_approval_script.sh list
 
 # 获取特定AlertScale
-./scripts/api_approval_script.sh get default my-alertscale
+./hack/api_approval_script.sh get default my-alertscale
 
 # 审批通过
-./scripts/api_approval_script.sh approve default my-alertscale admin@company.com
+./hack/api_approval_script.sh approve default my-alertscale admin@company.com
 
 # 拒绝审批
-./scripts/api_approval_script.sh reject default my-alertscale admin@company.com
+./hack/api_approval_script.sh reject default my-alertscale admin@company.com
 
 # 交互式模式
-./scripts/api_approval_script.sh interactive
+./hack/api_approval_script.sh interactive
 
 # 批量操作示例
-./scripts/api_approval_script.sh batch
+./hack/api_approval_script.sh batch
 ```
 
 ### 2. quick_approval.sh - 快速审批脚本
@@ -53,20 +53,20 @@
 **使用方法:**
 ```bash
 # 基本审批（使用默认审批人）
-./scripts/quick_approval.sh approve default my-alertscale
+./hack/quick_approval.sh approve default my-alertscale
 
 # 指定审批人
-./scripts/quick_approval.sh approve default my-alertscale admin@company.com
+./hack/quick_approval.sh approve default my-alertscale admin@company.com
 
 # 带理由的审批
-./scripts/quick_approval.sh approve default my-alertscale admin@company.com "High CPU usage"
+./hack/quick_approval.sh approve default my-alertscale admin@company.com "High CPU usage"
 
 # 拒绝审批
-./scripts/quick_approval.sh reject default my-alertscale admin@company.com "Policy violation"
+./hack/quick_approval.sh reject default my-alertscale admin@company.com "Policy violation"
 
 # 设置默认审批人
 export APPROVER="your-email@company.com"
-./scripts/quick_approval.sh approve default my-alertscale
+./hack/quick_approval.sh approve default my-alertscale
 ```
 
 ### 3. api_examples.sh - 示例演示脚本
@@ -75,7 +75,7 @@ export APPROVER="your-email@company.com"
 **使用方法:**
 ```bash
 # 运行所有示例
-./scripts/api_examples.sh
+./hack/api_examples.sh
 ```
 
 ## 环境配置
@@ -197,7 +197,7 @@ Content-Type: application/json
 启用详细输出：
 ```bash
 export CURL_OPTS="-v"
-./scripts/api_approval_script.sh health
+./hack/api_approval_script.sh health
 ```
 
 ## 使用示例
@@ -205,16 +205,16 @@ export CURL_OPTS="-v"
 ### 典型工作流程
 ```bash
 # 1. 检查API服务状态
-./scripts/api_approval_script.sh health
+./hack/api_approval_script.sh health
 
 # 2. 查看待审批的AlertScale
-./scripts/api_approval_script.sh list
+./hack/api_approval_script.sh list
 
 # 3. 获取特定AlertScale详情
-./scripts/api_approval_script.sh get default my-alertscale
+./hack/api_approval_script.sh get default my-alertscale
 
 # 4. 进行审批操作
-./scripts/quick_approval.sh approve default my-alertscale admin@company.com "Load testing approved"
+./hack/quick_approval.sh approve default my-alertscale admin@company.com "Load testing approved"
 ```
 
 ### 批量审批
@@ -224,7 +224,7 @@ cat > batch_approve.sh << 'EOF'
 #!/bin/bash
 ALERTSCALES=("app1-scale" "app2-scale" "app3-scale")
 for alertscale in "${ALERTSCALES[@]}"; do
-    ./scripts/quick_approval.sh approve default "$alertscale" admin@company.com "Batch approval"
+    ./hack/quick_approval.sh approve default "$alertscale" admin@company.com "Batch approval"
     sleep 1
 done
 EOF
@@ -239,7 +239,7 @@ chmod +x batch_approve.sh
 ```yaml
 - name: Approve AlertScale
   run: |
-    ./scripts/quick_approval.sh approve default my-alertscale ci@company.com "Automated approval"
+    ./hack/quick_approval.sh approve default my-alertscale ci@company.com "Automated approval"
   env:
     API_BASE: https://ops-api.company.com/api/v1
 ```
@@ -249,7 +249,7 @@ chmod +x batch_approve.sh
 stage('Approve Scale') {
     steps {
         script {
-            sh './scripts/quick_approval.sh approve default my-alertscale jenkins@company.com "Pipeline approval"'
+            sh './hack/quick_approval.sh approve default my-alertscale jenkins@company.com "Pipeline approval"'
         }
     }
     environment {
