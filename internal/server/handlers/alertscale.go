@@ -12,7 +12,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	scaletypes "udesk.cn/ops/internal/types"
+)
+
+// Constants for approval processing
+const (
+	approvalProcessingPending = "pending"
 )
 
 // init registers the AlertScale handler automatically
@@ -184,21 +188,26 @@ func (h *AlertScaleHandler) approveAlertScale(responseWriter ResponseWriter, w h
 		return
 	}
 
-	// Update AlertScale status and annotations
+	// Declarative approach: Only update annotations, let controller handle status transitions
 	if alertScale.Annotations == nil {
 		alertScale.Annotations = make(map[string]string)
 	}
-	alertScale.Annotations["ops.udesk.cn/approver"] = req.Approver
+
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+
+	// Set approval decision - controller will detect and process
+	alertScale.Annotations["ops.udesk.cn/approval-decision"] = "approve"
+	alertScale.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
+	alertScale.Annotations["ops.udesk.cn/approval-operator"] = req.Approver
 	alertScale.Annotations["ops.udesk.cn/approval-reason"] = req.Reason
 	if req.Comment != "" {
 		alertScale.Annotations["ops.udesk.cn/approval-comment"] = req.Comment
 	}
-	alertScale.Annotations["ops.udesk.cn/approval-time"] = time.Now().UTC().Format(time.RFC3339)
+	alertScale.Annotations["ops.udesk.cn/approval-processing"] = approvalProcessingPending
 
-	alertScale.Status.ScaleStatus.Status = scaletypes.ScaleStatusApproved
-
+	// Single atomic update - no status changes, no retries needed
 	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to approve AlertScale", "namespace", namespace, "name", name)
+		log.Error(err, "Failed to update AlertScale approval annotations", "namespace", namespace, "name", name)
 		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to approve AlertScale", err)
 		return
 	}
@@ -249,21 +258,26 @@ func (h *AlertScaleHandler) rejectAlertScale(responseWriter ResponseWriter, w ht
 		return
 	}
 
-	// Update AlertScale status and annotations
+	// Declarative approach: Only update annotations, let controller handle status transitions
 	if alertScale.Annotations == nil {
 		alertScale.Annotations = make(map[string]string)
 	}
-	alertScale.Annotations["ops.udesk.cn/rejector"] = req.Approver
-	alertScale.Annotations["ops.udesk.cn/rejection-reason"] = req.Reason
+
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+
+	// Set rejection decision - controller will detect and process
+	alertScale.Annotations["ops.udesk.cn/approval-decision"] = "reject"
+	alertScale.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
+	alertScale.Annotations["ops.udesk.cn/approval-operator"] = req.Approver
+	alertScale.Annotations["ops.udesk.cn/approval-reason"] = req.Reason
 	if req.Comment != "" {
-		alertScale.Annotations["ops.udesk.cn/rejection-comment"] = req.Comment
+		alertScale.Annotations["ops.udesk.cn/approval-comment"] = req.Comment
 	}
-	alertScale.Annotations["ops.udesk.cn/rejection-time"] = time.Now().UTC().Format(time.RFC3339)
+	alertScale.Annotations["ops.udesk.cn/approval-processing"] = approvalProcessingPending
 
-	alertScale.Status.ScaleStatus.Status = scaletypes.ScaleStatusRejected
-
+	// Single atomic update - no status changes, no retries needed
 	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to reject AlertScale", "namespace", namespace, "name", name)
+		log.Error(err, "Failed to update AlertScale rejection annotations", "namespace", namespace, "name", name)
 		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to reject AlertScale", err)
 		return
 	}

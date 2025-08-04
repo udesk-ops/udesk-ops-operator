@@ -85,7 +85,7 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&enableAPIServer, "enable-api-server", false,
+	flag.BoolVar(&enableAPIServer, "enable-api-server", true,
 		"If set, the API server will be enabled for external access")
 	flag.StringVar(&apiAddr, "api-addr", ":8088",
 		"The address the API server binds to.")
@@ -288,13 +288,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup signal handler that will be shared
+	ctx := ctrl.SetupSignalHandler()
+
 	// Start API server if enabled
 	if enableAPIServer {
 		setupLog.Info("Starting API server", "address", apiAddr)
 		apiServer := server.NewAPIServer(mgr.GetClient(), apiAddr)
 
-		// Start API server in a goroutine
-		ctx := ctrl.SetupSignalHandler()
+		// Start API server in a goroutine with shared context
 		go func() {
 			if err := apiServer.Start(ctx); err != nil {
 				setupLog.Error(err, "problem running API server")
@@ -303,7 +305,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

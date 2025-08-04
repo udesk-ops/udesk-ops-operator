@@ -14,6 +14,18 @@ import (
 	scaletypes "udesk.cn/ops/internal/types"
 )
 
+// Constants for approval actions
+const (
+	ApprovalActionApprove = "approve"
+	ApprovalActionReject  = "reject"
+)
+
+// Constants for approval processing status
+const (
+	ApprovalProcessingPending   = "pending"
+	ApprovalProcessingCompleted = "completed"
+)
+
 // init registers the Approval handler automatically
 func init() {
 	RegisterHandler("approval", func(k8sClient client.Client) Handler {
@@ -72,7 +84,7 @@ type BatchApprovalRequest struct {
 	Items    []ApprovalItem `json:"items"`
 	Approver string         `json:"approver"`
 	Reason   string         `json:"reason"`
-	Action   string         `json:"action"` // "approve" or "reject"
+	Action   string         `json:"action"` // ApprovalActionApprove or ApprovalActionReject
 }
 
 // ApprovalItem represents an item to be approved/rejected
@@ -160,7 +172,7 @@ func (h *ApprovalHandler) batchApproval(responseWriter ResponseWriter, w http.Re
 		return
 	}
 
-	if req.Action != "approve" && req.Action != "reject" {
+	if req.Action != ApprovalActionApprove && req.Action != ApprovalActionReject {
 		responseWriter.WriteError(w, http.StatusBadRequest, "Action must be either 'approve' or 'reject'", nil)
 		return
 	}
@@ -223,7 +235,7 @@ func (h *ApprovalHandler) batchApproval(responseWriter ResponseWriter, w http.Re
 	}
 }
 
-// processAlertScaleApproval processes approval for AlertScale resources
+// processAlertScaleApproval processes approval for AlertScale resources using annotation-based declarative approach
 func (h *ApprovalHandler) processAlertScaleApproval(ctx context.Context, item ApprovalItem, approver, reason, action string) bool {
 	log := logf.FromContext(ctx)
 
@@ -238,29 +250,30 @@ func (h *ApprovalHandler) processAlertScaleApproval(ctx context.Context, item Ap
 		return false
 	}
 
-	// Update annotations
+	// Declarative approach: Only update annotations, controller will reconcile the desired state
 	if alertScale.Annotations == nil {
 		alertScale.Annotations = make(map[string]string)
 	}
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
-	if action == "approve" {
-		alertScale.Annotations["ops.udesk.cn/approver"] = approver
-		alertScale.Annotations["ops.udesk.cn/approval-reason"] = reason
-		alertScale.Annotations["ops.udesk.cn/approval-time"] = timestamp
-		alertScale.Status.ScaleStatus.Status = scaletypes.ScaleStatusApproved
-	} else {
-		alertScale.Annotations["ops.udesk.cn/rejector"] = approver
-		alertScale.Annotations["ops.udesk.cn/rejection-reason"] = reason
-		alertScale.Annotations["ops.udesk.cn/rejection-time"] = timestamp
-		alertScale.Status.ScaleStatus.Status = scaletypes.ScaleStatusRejected
-	}
+	// Set approval decision annotations - controller will detect and process
+	alertScale.Annotations["ops.udesk.cn/approval-decision"] = action // "approve" or "reject"
+	alertScale.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
+	alertScale.Annotations["ops.udesk.cn/approval-operator"] = approver
+	alertScale.Annotations["ops.udesk.cn/approval-reason"] = reason
 
+	// Add processing state to prevent duplicate processing
+	alertScale.Annotations["ops.udesk.cn/approval-processing"] = ApprovalProcessingPending
+
+	// Single atomic update - no status changes here
 	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to update AlertScale in batch approval", "namespace", item.Namespace, "name", item.Name)
+		log.Error(err, "Failed to update AlertScale approval annotations", "namespace", item.Namespace, "name", item.Name)
 		return false
 	}
+
+	log.Info("Approval decision recorded, controller will process the status transition",
+		"namespace", item.Namespace, "name", item.Name, "decision", action, "approver", approver)
 
 	return true
 }
