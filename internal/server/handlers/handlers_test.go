@@ -11,7 +11,7 @@ func TestNewAlertScaleHandler(t *testing.T) {
 	handler := NewAlertScaleHandler(client)
 
 	if handler == nil {
-		t.Error("Expected non-nil handler")
+		t.Fatal("Expected non-nil handler")
 	}
 
 	if handler.client != client {
@@ -23,7 +23,7 @@ func TestNewHealthHandler(t *testing.T) {
 	handler := NewHealthHandler()
 
 	if handler == nil {
-		t.Error("Expected non-nil handler")
+		t.Fatal("Expected non-nil handler")
 	}
 }
 
@@ -31,6 +31,6 @@ func TestNewDefaultResponseWriter(t *testing.T) {
 	rw := NewDefaultResponseWriter()
 
 	if rw == nil {
-		t.Error("Expected non-nil response writer")
+		t.Fatal("Expected non-nil response writer")
 	}
 }
