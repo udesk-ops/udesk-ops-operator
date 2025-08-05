@@ -11,7 +11,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/constants"
 	"udesk.cn/ops/internal/types"
 )
 
@@ -254,25 +253,6 @@ func (h *PodRebalanceHandler) handleDelete(w http.ResponseWriter, r *http.Reques
 
 // handleApprove approves a PodRebalance resource
 func (h *PodRebalanceHandler) handleApprove(w http.ResponseWriter, r *http.Request) {
-	h.handleApprovalAction(w, r, "approve")
-}
-
-// handleReject rejects a PodRebalance resource
-func (h *PodRebalanceHandler) handleReject(w http.ResponseWriter, r *http.Request) {
-	h.handleApprovalAction(w, r, "reject")
-}
-
-// PodRebalanceApprovalRequest represents an approval/rejection request for PodRebalance
-type PodRebalanceApprovalRequest struct {
-	Approver string `json:"approver"`
-	Reason   string `json:"reason"`
-	Comment  string `json:"comment,omitempty"`
-}
-
-// handleApprovalAction handles approval/rejection actions
-func (h *PodRebalanceHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request, action string) {
-	ctx := r.Context()
-	log := logf.FromContext(ctx).WithName("podrebalance-approval")
 	vars := mux.Vars(r)
 	name := vars["name"]
 	namespace := r.URL.Query().Get("namespace")
@@ -280,62 +260,89 @@ func (h *PodRebalanceHandler) handleApprovalAction(w http.ResponseWriter, r *htt
 		namespace = DefaultNamespace
 	}
 
-	var req PodRebalanceApprovalRequest
+	// Parse request body
+	var req CommonApprovalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.Approver == "" || req.Reason == "" {
-		http.Error(w, "approver and reason are required", http.StatusBadRequest)
-		return
-	}
+	// Create common approval processor
+	processor := NewCommonApprovalProcessor(h.client)
 
-	var podRebalance opsv1beta1.PodRebalance
-	if err := h.client.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &podRebalance); err != nil {
-		if client.IgnoreNotFound(err) == nil {
+	// Process approval using specialized method
+	resourceKey := client.ObjectKey{Namespace: namespace, Name: name}
+	if err := processor.ProcessPodRebalanceApproval(r.Context(), resourceKey, "approve", req); err != nil {
+		switch {
+		case err.Error() == ErrResourceNotFound:
 			http.Error(w, "PodRebalance not found", http.StatusNotFound)
-			return
+		case err.Error() == ErrResourceNotInApprovalState:
+			http.Error(w, "PodRebalance is not in approvaling state", http.StatusBadRequest)
+		case err.Error() == ErrApproverRequired || err.Error() == ErrReasonRequired:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, "Failed to approve PodRebalance", http.StatusInternalServerError)
 		}
-		log.Error(err, "Failed to get PodRebalance for approval", "namespace", namespace, "name", name)
-		http.Error(w, "Failed to get PodRebalance", http.StatusInternalServerError)
 		return
 	}
-
-	if podRebalance.Status.Status != types.RebalanceStatusApprovaling {
-		http.Error(w, "PodRebalance is not in approvaling state", http.StatusBadRequest)
-		return
-	}
-
-	timestamp := time.Now().Format(time.RFC3339)
-
-	// 设置审批注解 - 控制器会检测并处理
-	if podRebalance.Annotations == nil {
-		podRebalance.Annotations = make(map[string]string)
-	}
-	podRebalance.Annotations[constants.ApprovalDecisionAnnotation] = action
-	podRebalance.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
-	podRebalance.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
-	podRebalance.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
-	if req.Comment != "" {
-		podRebalance.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
-	}
-	podRebalance.Annotations[constants.ApprovalProcessingAnnotation] = ApprovalProcessingPending
-
-	if err := h.client.Update(ctx, &podRebalance); err != nil {
-		log.Error(err, "Failed to update PodRebalance with approval decision", "action", action)
-		http.Error(w, "Failed to process approval", http.StatusInternalServerError)
-		return
-	}
-
-	log.Info("PodRebalance approval processed", "namespace", namespace, "name", name, "action", action, "approver", req.Approver)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"action":    action,
+		"namespace": namespace,
+		"name":      name,
+		"status":    "Approved",
 		"approver":  req.Approver,
-		"timestamp": timestamp,
-		"message":   "Approval processed successfully",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"message":   "PodRebalance approved successfully",
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleReject rejects a PodRebalance resource
+func (h *PodRebalanceHandler) handleReject(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	name := vars["name"]
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+
+	// Parse request body
+	var req CommonApprovalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Create common approval processor
+	processor := NewCommonApprovalProcessor(h.client)
+
+	// Process rejection using specialized method
+	resourceKey := client.ObjectKey{Namespace: namespace, Name: name}
+	if err := processor.ProcessPodRebalanceApproval(r.Context(), resourceKey, "reject", req); err != nil {
+		switch {
+		case err.Error() == ErrResourceNotFound:
+			http.Error(w, "PodRebalance not found", http.StatusNotFound)
+		case err.Error() == ErrResourceNotInApprovalState:
+			http.Error(w, "PodRebalance is not in approvaling state", http.StatusBadRequest)
+		case err.Error() == ErrApproverRequired || err.Error() == ErrReasonRequired:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, "Failed to reject PodRebalance", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"namespace": namespace,
+		"name":      name,
+		"status":    "Rejected",
+		"rejector":  req.Approver,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"message":   "PodRebalance rejected successfully",
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return

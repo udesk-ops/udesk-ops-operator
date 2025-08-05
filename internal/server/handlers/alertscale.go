@@ -12,12 +12,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/constants"
-)
-
-// Constants for approval processing
-const (
-	approvalProcessingPending = "pending"
 )
 
 // init registers the AlertScale handler automatically
@@ -159,57 +153,29 @@ func (h *AlertScaleHandler) approveAlertScale(responseWriter ResponseWriter, w h
 	namespace := vars["namespace"]
 	name := vars["name"]
 
-	var req ApprovalRequest
+	// Parse request body
+	var req CommonApprovalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responseWriter.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	if req.Approver == "" {
-		responseWriter.WriteError(w, http.StatusBadRequest, "Approver is required", nil)
-		return
-	}
+	// Create common approval processor
+	processor := NewCommonApprovalProcessor(h.client)
 
-	ctx := context.Background()
-	log := logf.FromContext(ctx)
-
-	var alertScale opsv1beta1.AlertScale
-	key := types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}
-
-	if err := h.client.Get(ctx, key, &alertScale); err != nil {
-		log.Error(err, "Failed to get AlertScale for approval", "namespace", namespace, "name", name)
-		if client.IgnoreNotFound(err) == nil {
+	// Process approval using specialized method
+	resourceKey := client.ObjectKey{Namespace: namespace, Name: name}
+	if err := processor.ProcessAlertScaleApproval(r.Context(), resourceKey, "approve", req); err != nil {
+		switch {
+		case err.Error() == ErrResourceNotFound:
 			responseWriter.WriteError(w, http.StatusNotFound, "AlertScale not found", err)
-		} else {
-			responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to get AlertScale", err)
+		case err.Error() == ErrResourceNotInApprovalState:
+			responseWriter.WriteError(w, http.StatusBadRequest, "AlertScale is not in approvaling state", err)
+		case err.Error() == ErrApproverRequired || err.Error() == ErrReasonRequired:
+			responseWriter.WriteError(w, http.StatusBadRequest, err.Error(), nil)
+		default:
+			responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to approve AlertScale", err)
 		}
-		return
-	}
-
-	// Declarative approach: Only update annotations, let controller handle status transitions
-	if alertScale.Annotations == nil {
-		alertScale.Annotations = make(map[string]string)
-	}
-
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	// Set approval decision - controller will detect and process
-	alertScale.Annotations[constants.ApprovalDecisionAnnotation] = "approve"
-	alertScale.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
-	alertScale.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
-	alertScale.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
-	if req.Comment != "" {
-		alertScale.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
-	}
-	alertScale.Annotations[constants.ApprovalProcessingAnnotation] = approvalProcessingPending
-
-	// Single atomic update - no status changes, no retries needed
-	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to update AlertScale approval annotations", "namespace", namespace, "name", name)
-		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to approve AlertScale", err)
 		return
 	}
 
@@ -218,6 +184,7 @@ func (h *AlertScaleHandler) approveAlertScale(responseWriter ResponseWriter, w h
 		"name":      name,
 		"status":    "Approved",
 		"approver":  req.Approver,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 
 	responseWriter.WriteSuccess(w, "AlertScale approved successfully", responseData)
@@ -229,57 +196,29 @@ func (h *AlertScaleHandler) rejectAlertScale(responseWriter ResponseWriter, w ht
 	namespace := vars["namespace"]
 	name := vars["name"]
 
-	var req ApprovalRequest
+	// Parse request body
+	var req CommonApprovalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responseWriter.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	if req.Approver == "" {
-		responseWriter.WriteError(w, http.StatusBadRequest, "Approver is required", nil)
-		return
-	}
+	// Create common approval processor
+	processor := NewCommonApprovalProcessor(h.client)
 
-	ctx := context.Background()
-	log := logf.FromContext(ctx)
-
-	var alertScale opsv1beta1.AlertScale
-	key := types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}
-
-	if err := h.client.Get(ctx, key, &alertScale); err != nil {
-		log.Error(err, "Failed to get AlertScale for rejection", "namespace", namespace, "name", name)
-		if client.IgnoreNotFound(err) == nil {
+	// Process rejection using specialized method
+	resourceKey := client.ObjectKey{Namespace: namespace, Name: name}
+	if err := processor.ProcessAlertScaleApproval(r.Context(), resourceKey, "reject", req); err != nil {
+		switch {
+		case err.Error() == ErrResourceNotFound:
 			responseWriter.WriteError(w, http.StatusNotFound, "AlertScale not found", err)
-		} else {
-			responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to get AlertScale", err)
+		case err.Error() == ErrResourceNotInApprovalState:
+			responseWriter.WriteError(w, http.StatusBadRequest, "AlertScale is not in approvaling state", err)
+		case err.Error() == ErrApproverRequired || err.Error() == ErrReasonRequired:
+			responseWriter.WriteError(w, http.StatusBadRequest, err.Error(), nil)
+		default:
+			responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to reject AlertScale", err)
 		}
-		return
-	}
-
-	// Declarative approach: Only update annotations, let controller handle status transitions
-	if alertScale.Annotations == nil {
-		alertScale.Annotations = make(map[string]string)
-	}
-
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	// Set rejection decision - controller will detect and process
-	alertScale.Annotations[constants.ApprovalDecisionAnnotation] = "reject"
-	alertScale.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
-	alertScale.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
-	alertScale.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
-	if req.Comment != "" {
-		alertScale.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
-	}
-	alertScale.Annotations[constants.ApprovalProcessingAnnotation] = approvalProcessingPending
-
-	// Single atomic update - no status changes, no retries needed
-	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to update AlertScale rejection annotations", "namespace", namespace, "name", name)
-		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to reject AlertScale", err)
 		return
 	}
 
@@ -288,6 +227,7 @@ func (h *AlertScaleHandler) rejectAlertScale(responseWriter ResponseWriter, w ht
 		"name":      name,
 		"status":    "Rejected",
 		"rejector":  req.Approver,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 
 	responseWriter.WriteSuccess(w, "AlertScale rejected successfully", responseData)

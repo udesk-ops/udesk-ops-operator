@@ -359,12 +359,21 @@ udesk-ops-operator/
 ├── internal/
 │   ├── controller/        # Controller 实现
 │   ├── handler/           # 状态处理器
+│   ├── server/handlers/   # HTTP API 处理器 (含审批系统)
 │   ├── strategy/          # 策略实现
 │   ├── types/             # 类型定义
 │   └── webhook/           # Webhook 实现
 ├── test/                  # 测试文件
 └── docs/                  # 文档
 ```
+
+### 开发文档
+
+- **[开发规范](./.github/prompts/dev.prompt.md)** - 代码规范、测试要求和最佳实践
+- **[审批抽象指南](./docs/approval-abstraction-guide.md)** - 通用审批系统使用和扩展指南
+- **[API 服务器使用](./docs/api-server-usage.md)** - REST API 接口说明
+- **[部署指南](./docs/deployment-guide.md)** - 生产环境部署指南
+- **[测试标准](./docs/testing-standards.md)** - 测试编写规范
 
 ### 开发流程
 

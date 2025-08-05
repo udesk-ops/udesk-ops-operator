@@ -11,7 +11,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/constants"
 	scaletypes "udesk.cn/ops/internal/types"
 )
 
@@ -101,6 +100,7 @@ type ApprovalStats struct {
 	TotalApproved int               `json:"totalApproved"`
 	TotalRejected int               `json:"totalRejected"`
 	AlertScales   ApprovalTypeStats `json:"alertScales"`
+	PodRebalances ApprovalTypeStats `json:"podRebalances"`
 }
 
 // ApprovalTypeStats represents statistics for a specific approval type
@@ -152,6 +152,40 @@ func (h *ApprovalHandler) listPendingApprovals(responseWriter ResponseWriter, w 
 		}
 	}
 
+	// Query PodRebalances that need approval
+	var podRebalanceList opsv1beta1.PodRebalanceList
+	if err := h.client.List(ctx, &podRebalanceList); err != nil {
+		log.Error(err, "Failed to list PodRebalances for pending approvals")
+		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to list pending approvals", err)
+		return
+	}
+
+	for _, podRebalance := range podRebalanceList.Items {
+		if podRebalance.Status.Status == scaletypes.RebalanceStatusApprovaling {
+			item := PendingApprovalItem{
+				Type:       "PodRebalance",
+				Namespace:  podRebalance.Namespace,
+				Name:       podRebalance.Name,
+				Reason:     podRebalance.Spec.Strategy.Type, // Use strategy type as reason
+				CreatedAt:  podRebalance.CreationTimestamp.Time,
+				TargetKind: "Pod",
+				TargetName: podRebalance.Spec.Namespace, // Use target namespace
+			}
+
+			// Extract priority from annotations if available
+			if priority, exists := podRebalance.Annotations["ops.udesk.cn/priority"]; exists {
+				item.Priority = priority
+			}
+
+			// Extract requester from annotations if available
+			if requester, exists := podRebalance.Annotations["ops.udesk.cn/requested-by"]; exists {
+				item.RequestedBy = requester
+			}
+
+			pendingItems = append(pendingItems, item)
+		}
+	}
+
 	responseData := map[string]interface{}{
 		"items": pendingItems,
 		"count": len(pendingItems),
@@ -188,7 +222,26 @@ func (h *ApprovalHandler) batchApproval(responseWriter ResponseWriter, w http.Re
 	for _, item := range req.Items {
 		switch item.Type {
 		case "AlertScale":
-			success := h.processAlertScaleApproval(ctx, item, req.Approver, req.Reason, req.Action)
+			success := h.processResourceApproval(ctx, item, req.Approver, req.Reason, req.Action, "AlertScale")
+			result := map[string]interface{}{
+				"type":      item.Type,
+				"namespace": item.Namespace,
+				"name":      item.Name,
+				"success":   success,
+				"action":    req.Action,
+			}
+
+			if success {
+				successCount++
+			} else {
+				failureCount++
+				result["error"] = "Failed to process approval"
+			}
+
+			results = append(results, result)
+
+		case "PodRebalance":
+			success := h.processResourceApproval(ctx, item, req.Approver, req.Reason, req.Action, "PodRebalance")
 			result := map[string]interface{}{
 				"type":      item.Type,
 				"namespace": item.Namespace,
@@ -236,47 +289,53 @@ func (h *ApprovalHandler) batchApproval(responseWriter ResponseWriter, w http.Re
 	}
 }
 
-// processAlertScaleApproval processes approval for AlertScale resources using annotation-based declarative approach
-func (h *ApprovalHandler) processAlertScaleApproval(ctx context.Context, item ApprovalItem, approver, reason, action string) bool {
+// processResourceApproval processes approval for any resource type using annotation-based declarative approach
+func (h *ApprovalHandler) processResourceApproval(ctx context.Context, item ApprovalItem, approver, reason, action, resourceType string) bool {
 	log := logf.FromContext(ctx)
 
-	var alertScale opsv1beta1.AlertScale
 	key := client.ObjectKey{
 		Namespace: item.Namespace,
 		Name:      item.Name,
 	}
 
-	if err := h.client.Get(ctx, key, &alertScale); err != nil {
-		log.Error(err, "Failed to get AlertScale for batch approval", "namespace", item.Namespace, "name", item.Name)
+	// Create common approval processor
+	processor := NewCommonApprovalProcessor(h.client)
+
+	// Create approval request
+	req := CommonApprovalRequest{
+		Approver: approver,
+		Reason:   reason,
+	}
+
+	switch resourceType {
+	case "AlertScale":
+		alertScale := &opsv1beta1.AlertScale{}
+		adapter := NewAlertScaleApprovalAdapter(alertScale)
+
+		if err := processor.ProcessApprovalRequest(ctx, key, adapter, action, req); err != nil {
+			log.Error(err, "Failed to process AlertScale approval", "namespace", item.Namespace, "name", item.Name)
+			return false
+		}
+
+		log.Info("AlertScale approval decision recorded", "namespace", item.Namespace, "name", item.Name, "decision", action, "approver", approver)
+		return true
+
+	case "PodRebalance":
+		podRebalance := &opsv1beta1.PodRebalance{}
+		adapter := NewPodRebalanceApprovalAdapter(podRebalance)
+
+		if err := processor.ProcessApprovalRequest(ctx, key, adapter, action, req); err != nil {
+			log.Error(err, "Failed to process PodRebalance approval", "namespace", item.Namespace, "name", item.Name)
+			return false
+		}
+
+		log.Info("PodRebalance approval decision recorded", "namespace", item.Namespace, "name", item.Name, "decision", action, "approver", approver)
+		return true
+
+	default:
+		log.Error(nil, "Unsupported resource type for approval", "resourceType", resourceType)
 		return false
 	}
-
-	// Declarative approach: Only update annotations, controller will reconcile the desired state
-	if alertScale.Annotations == nil {
-		alertScale.Annotations = make(map[string]string)
-	}
-
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	// Set approval decision annotations - controller will detect and process
-	alertScale.Annotations[constants.ApprovalDecisionAnnotation] = action // "approve" or "reject"
-	alertScale.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
-	alertScale.Annotations[constants.ApprovalOperatorAnnotation] = approver
-	alertScale.Annotations[constants.ApprovalReasonAnnotation] = reason
-
-	// Add processing state to prevent duplicate processing
-	alertScale.Annotations[constants.ApprovalProcessingAnnotation] = ApprovalProcessingPending
-
-	// Single atomic update - no status changes here
-	if err := h.client.Update(ctx, &alertScale); err != nil {
-		log.Error(err, "Failed to update AlertScale approval annotations", "namespace", item.Namespace, "name", item.Name)
-		return false
-	}
-
-	log.Info("Approval decision recorded, controller will process the status transition",
-		"namespace", item.Namespace, "name", item.Name, "decision", action, "approver", approver)
-
-	return true
 }
 
 // getApprovalStats handles GET /api/v1/approvals/stats
@@ -304,6 +363,28 @@ func (h *ApprovalHandler) getApprovalStats(responseWriter ResponseWriter, w http
 			stats.TotalApproved++
 		case scaletypes.ScaleStatusRejected:
 			stats.AlertScales.Rejected++
+			stats.TotalRejected++
+		}
+	}
+
+	// Get PodRebalance statistics
+	var podRebalanceList opsv1beta1.PodRebalanceList
+	if err := h.client.List(ctx, &podRebalanceList); err != nil {
+		log.Error(err, "Failed to list PodRebalances for statistics")
+		responseWriter.WriteError(w, http.StatusInternalServerError, "Failed to get approval statistics", err)
+		return
+	}
+
+	for _, podRebalance := range podRebalanceList.Items {
+		switch podRebalance.Status.Status {
+		case scaletypes.RebalanceStatusApprovaling:
+			stats.PodRebalances.Pending++
+			stats.TotalPending++
+		case scaletypes.RebalanceStatusApproved:
+			stats.PodRebalances.Approved++
+			stats.TotalApproved++
+		case scaletypes.RebalanceStatusRejected:
+			stats.PodRebalances.Rejected++
 			stats.TotalRejected++
 		}
 	}
