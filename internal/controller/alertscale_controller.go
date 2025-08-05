@@ -86,16 +86,13 @@ func (r *AlertScaleReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *AlertScaleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// 初始化状态处理器
 	r.StateHandlers = map[string]types.StateHandler{
-		types.ScaleStatusPending:     &handler.PendingHandler{},
-		types.ScaleStatusScaling:     &handler.ScalingHandler{},
-		types.ScaleStatusScaled:      &handler.ScaledHandler{},
-		types.ScaleStatusCompleted:   &handler.CompletedHandler{},
-		types.ScaleStatusFailed:      &handler.FailedHandler{},
-		types.ScaleStatusArchived:    &handler.ArchivedHandler{},
-		types.ScaleStatusApprovaling: &handler.ApprovalingHandler{},
-		types.ScaleStatusApproved:    &handler.ApprovedHandler{},
-
-		"default": &handler.DefaultHandler{},
+		types.ScaleStatusPending:   &handler.PendingHandler{},
+		types.ScaleStatusScaling:   &handler.ScalingHandler{},
+		types.ScaleStatusScaled:    &handler.ScaledHandler{},
+		types.ScaleStatusCompleted: &handler.CompletedHandler{},
+		types.ScaleStatusFailed:    &handler.FailedHandler{},
+		types.ScaleStatusArchived:  &handler.ArchivedHandler{},
+		"default":                  &handler.DefaultHandler{},
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).

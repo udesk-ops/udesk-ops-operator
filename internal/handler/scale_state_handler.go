@@ -7,7 +7,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
-	"udesk.cn/ops/internal/constants"
 	"udesk.cn/ops/internal/types"
 )
 
@@ -44,175 +43,175 @@ func (h *BaseStateHandler) isTimeout(beginTime metav1.Time, timeoutDuration time
 }
 
 // ApprovalingHandler 处理 Approvaling 状态
-type ApprovalingHandler struct {
-	BaseStateHandler
-}
+// type ApprovalingHandler struct {
+// 	BaseStateHandler
+// }
 
-func (h *ApprovalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	log := logf.FromContext(ctx.Context)
-	log.Info("Handling Approvaling state", "alertScale", ctx.AlertScale.Name)
+// func (h *ApprovalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
+// 	log := logf.FromContext(ctx.Context)
+// 	log.Info("Handling Approvaling state", "alertScale", ctx.AlertScale.Name)
 
-	// 检查API审批决策
-	if result, err := h.processAPIApproval(ctx); result != nil {
-		return *result, err
-	}
+// 	// 检查API审批决策
+// 	if result, err := h.processAPIApproval(ctx); result != nil {
+// 		return *result, err
+// 	}
 
-	// 检查自动批准
-	if ctx.AlertScale.Spec.ScaleAutoApproval {
-		return h.processAutoApproval(ctx)
-	}
+// 	// 检查自动批准
+// 	if ctx.AlertScale.Spec.ScaleAutoApproval {
+// 		return h.processAutoApproval(ctx)
+// 	}
 
-	// 检查超时
-	return h.processTimeout(ctx)
-}
+// 	// 检查超时
+// 	return h.processTimeout(ctx)
+// }
 
-func (h *ApprovalingHandler) processAPIApproval(ctx *types.ScaleContext) (*ctrl.Result, error) {
-	log := logf.FromContext(ctx.Context)
+// func (h *ApprovalingHandler) processAPIApproval(ctx *types.ScaleContext) (*ctrl.Result, error) {
+// 	log := logf.FromContext(ctx.Context)
 
-	decision, exists := ctx.AlertScale.Annotations[constants.ApprovalDecisionAnnotation]
-	if !exists {
-		return nil, nil
-	}
+// 	decision, exists := ctx.AlertScale.Annotations[constants.ApprovalDecisionAnnotation]
+// 	if !exists {
+// 		return nil, nil
+// 	}
 
-	processing := ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation]
-	if processing != "pending" {
-		return nil, nil
-	}
+// 	processing := ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation]
+// 	if processing != "pending" {
+// 		return nil, nil
+// 	}
 
-	log.Info("Processing API approval decision", "decision", decision, "alertScale", ctx.AlertScale.Name)
+// 	log.Info("Processing API approval decision", "decision", decision, "alertScale", ctx.AlertScale.Name)
 
-	var newStatus string
-	switch decision {
-	case "approve":
-		newStatus = types.ScaleStatusApproved
-		log.Info("API approval processed: Approved", "alertScale", ctx.AlertScale.Name)
-	case "reject":
-		newStatus = types.ScaleStatusRejected
-		log.Info("API approval processed: Rejected", "alertScale", ctx.AlertScale.Name)
-	default:
-		log.Error(nil, "Unknown approval decision", "decision", decision)
-		result := ctrl.Result{RequeueAfter: time.Second * 10}
-		return &result, nil
-	}
+// 	var newStatus string
+// 	switch decision {
+// 	case "approve":
+// 		newStatus = types.ScaleStatusApproved
+// 		log.Info("API approval processed: Approved", "alertScale", ctx.AlertScale.Name)
+// 	case "reject":
+// 		newStatus = types.ScaleStatusRejected
+// 		log.Info("API approval processed: Rejected", "alertScale", ctx.AlertScale.Name)
+// 	default:
+// 		log.Error(nil, "Unknown approval decision", "decision", decision)
+// 		result := ctrl.Result{RequeueAfter: time.Second * 10}
+// 		return &result, nil
+// 	}
 
-	// 更新状态
-	if err := h.updateStatus(ctx, newStatus); err != nil {
-		log.Error(err, "Failed to update status after API approval", "decision", decision)
-		return &ctrl.Result{}, err
-	}
+// 	// 更新状态
+// 	if err := h.updateStatus(ctx, newStatus); err != nil {
+// 		log.Error(err, "Failed to update status after API approval", "decision", decision)
+// 		return &ctrl.Result{}, err
+// 	}
 
-	// 标记处理完成
-	if err := h.markApprovalCompleted(ctx); err != nil {
-		log.Error(err, "Failed to mark approval as completed")
-	}
+// 	// 标记处理完成
+// 	if err := h.markApprovalCompleted(ctx); err != nil {
+// 		log.Error(err, "Failed to mark approval as completed")
+// 	}
 
-	result := ctrl.Result{Requeue: true}
-	return &result, nil
-}
+// 	result := ctrl.Result{Requeue: true}
+// 	return &result, nil
+// }
 
-func (h *ApprovalingHandler) processAutoApproval(ctx *types.ScaleContext) (ctrl.Result, error) {
-	log := logf.FromContext(ctx.Context)
-	log.Info("Auto approval enabled, transitioning to Approved state")
+// func (h *ApprovalingHandler) processAutoApproval(ctx *types.ScaleContext) (ctrl.Result, error) {
+// 	log := logf.FromContext(ctx.Context)
+// 	log.Info("Auto approval enabled, transitioning to Approved state")
 
-	if err := h.updateStatus(ctx, types.ScaleStatusApproved); err != nil {
-		log.Error(err, "Failed to update status to Approved")
-		return ctrl.Result{}, err
-	}
+// 	if err := h.updateStatus(ctx, types.ScaleStatusApproved); err != nil {
+// 		log.Error(err, "Failed to update status to Approved")
+// 		return ctrl.Result{}, err
+// 	}
 
-	return ctrl.Result{Requeue: true}, nil
-}
+// 	return ctrl.Result{Requeue: true}, nil
+// }
 
-func (h *ApprovalingHandler) processTimeout(ctx *types.ScaleContext) (ctrl.Result, error) {
-	timeout, err := h.parseDuration(ctx.AlertScale.Spec.ScaleTimeout)
-	if err != nil {
-		log := logf.FromContext(ctx.Context)
-		log.Error(err, "Failed to parse scale timeout duration")
-		return ctrl.Result{}, err
-	}
+// func (h *ApprovalingHandler) processTimeout(ctx *types.ScaleContext) (ctrl.Result, error) {
+// 	timeout, err := h.parseDuration(ctx.AlertScale.Spec.ScaleTimeout)
+// 	if err != nil {
+// 		log := logf.FromContext(ctx.Context)
+// 		log.Error(err, "Failed to parse scale timeout duration")
+// 		return ctrl.Result{}, err
+// 	}
 
-	beginTime := ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime
-	if beginTime.IsZero() {
-		ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime = metav1.Now()
-		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
+// 	beginTime := ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime
+// 	if beginTime.IsZero() {
+// 		ctx.AlertScale.Status.ScaleStatus.ScaleBeginTime = metav1.Now()
+// 		if err := ctx.Client.Status().Update(ctx.Context, ctx.AlertScale); err != nil {
+// 			return ctrl.Result{}, err
+// 		}
+// 	}
 
-	if h.isTimeout(beginTime, timeout) {
-		log := logf.FromContext(ctx.Context)
-		log.Info("Approval timeout reached, transitioning to Rejected state")
+// 	if h.isTimeout(beginTime, timeout) {
+// 		log := logf.FromContext(ctx.Context)
+// 		log.Info("Approval timeout reached, transitioning to Rejected state")
 
-		if err := h.updateStatus(ctx, types.ScaleStatusRejected); err != nil {
-			log.Error(err, "Failed to update status to Rejected")
-			return ctrl.Result{}, err
-		}
+// 		if err := h.updateStatus(ctx, types.ScaleStatusRejected); err != nil {
+// 			log.Error(err, "Failed to update status to Rejected")
+// 			return ctrl.Result{}, err
+// 		}
 
-		h.sendNotification(ctx, "rejected")
-		return ctrl.Result{}, nil
-	}
+// 		h.sendNotification(ctx, "rejected")
+// 		return ctrl.Result{}, nil
+// 	}
 
-	log := logf.FromContext(ctx.Context)
-	log.Info("Waiting for approval", "alertScale", ctx.AlertScale.Name)
-	return ctrl.Result{RequeueAfter: time.Second * 10}, nil
-}
+// 	log := logf.FromContext(ctx.Context)
+// 	log.Info("Waiting for approval", "alertScale", ctx.AlertScale.Name)
+// 	return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+// }
 
-func (h *ApprovalingHandler) markApprovalCompleted(ctx *types.ScaleContext) error {
-	if ctx.AlertScale.Annotations == nil {
-		ctx.AlertScale.Annotations = make(map[string]string)
-	}
-	ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation] = "completed"
-	return ctx.Client.Update(ctx.Context, ctx.AlertScale)
-}
+// func (h *ApprovalingHandler) markApprovalCompleted(ctx *types.ScaleContext) error {
+// 	if ctx.AlertScale.Annotations == nil {
+// 		ctx.AlertScale.Annotations = make(map[string]string)
+// 	}
+// 	ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation] = "completed"
+// 	return ctx.Client.Update(ctx.Context, ctx.AlertScale)
+// }
 
-func (h *ApprovalingHandler) CanTransition(toState string) bool {
-	return toState == types.ScaleStatusApproved || toState == types.ScaleStatusRejected
-}
+// func (h *ApprovalingHandler) CanTransition(toState string) bool {
+// 	return toState == types.ScaleStatusApproved || toState == types.ScaleStatusRejected
+// }
 
 // ApprovedHandler 处理 Approved 状态
-type ApprovedHandler struct {
-	BaseStateHandler
-}
+// type ApprovedHandler struct {
+// 	BaseStateHandler
+// }
 
-func (h *ApprovedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	log := logf.FromContext(ctx.Context)
-	log.Info("Handling Approved state", "alertScale", ctx.AlertScale.Name)
+// func (h *ApprovedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
+// 	log := logf.FromContext(ctx.Context)
+// 	log.Info("Handling Approved state", "alertScale", ctx.AlertScale.Name)
 
-	if err := h.updateStatus(ctx, types.ScaleStatusScaling); err != nil {
-		log.Error(err, "Failed to update status to Scaling")
-		return ctrl.Result{}, err
-	}
+// 	if err := h.updateStatus(ctx, types.ScaleStatusScaling); err != nil {
+// 		log.Error(err, "Failed to update status to Scaling")
+// 		return ctrl.Result{}, err
+// 	}
 
-	h.sendNotification(ctx, "approved")
+// 	h.sendNotification(ctx, "approved")
 
-	log.Info("Transitioning to Scaling state", "alertScale", ctx.AlertScale.Name)
-	return ctrl.Result{Requeue: true}, nil
-}
+// 	log.Info("Transitioning to Scaling state", "alertScale", ctx.AlertScale.Name)
+// 	return ctrl.Result{Requeue: true}, nil
+// }
 
-func (h *ApprovedHandler) CanTransition(toState string) bool {
-	return toState == types.ScaleStatusScaling
-}
+// func (h *ApprovedHandler) CanTransition(toState string) bool {
+// 	return toState == types.ScaleStatusScaling
+// }
 
 // RejectedHandler 处理 Rejected 状态
-type RejectedHandler struct {
-	BaseStateHandler
-}
+// type RejectedHandler struct {
+// 	BaseStateHandler
+// }
 
-func (h *RejectedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
-	log := logf.FromContext(ctx.Context)
-	log.Info("Handling Rejected state", "alertScale", ctx.AlertScale.Name)
+// func (h *RejectedHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error) {
+// 	log := logf.FromContext(ctx.Context)
+// 	log.Info("Handling Rejected state", "alertScale", ctx.AlertScale.Name)
 
-	if err := h.updateStatus(ctx, types.ScaleStatusCompleted); err != nil {
-		log.Error(err, "Failed to update status to Completed")
-		return ctrl.Result{}, err
-	}
+// 	if err := h.updateStatus(ctx, types.ScaleStatusCompleted); err != nil {
+// 		log.Error(err, "Failed to update status to Completed")
+// 		return ctrl.Result{}, err
+// 	}
 
-	h.sendNotification(ctx, types.ScaleStatusRejected)
-	return ctrl.Result{}, nil
-}
+// 	h.sendNotification(ctx, types.ScaleStatusRejected)
+// 	return ctrl.Result{}, nil
+// }
 
-func (h *RejectedHandler) CanTransition(toState string) bool {
-	return toState == types.ScaleStatusCompleted
-}
+// func (h *RejectedHandler) CanTransition(toState string) bool {
+// 	return toState == types.ScaleStatusCompleted
+// }
 
 // PendingHandler 处理 Pending 状态
 type PendingHandler struct {
