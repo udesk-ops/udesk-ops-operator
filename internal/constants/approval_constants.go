@@ -21,6 +21,18 @@ const (
 	ApprovalProcessingAnnotation = "ops.udesk.cn/approval-processing"
 )
 
+// 审批默认值常量
+const (
+	// ApprovalDefaultTimeout 默认审批超时时间，单位分钟
+	ApprovalDefaultTimeout = 30
+	// ApprovalDefaultUser 默认审批操作员
+	ApprovalDefaultUser = "system"
+	// ApprovalDefaultReason 默认审批原因
+	ApprovalReasonAutoApproved = "auto-approval"
+	// ApprovalDefaultComment 默认审批备注
+	ApprovalDefaultComment = "自动审批"
+)
+
 // 审批决策值常量
 const (
 	// ApprovalDecisionApprove 批准

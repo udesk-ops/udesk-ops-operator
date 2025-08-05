@@ -12,6 +12,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/constants"
 )
 
 // Constants for approval processing
@@ -196,14 +197,14 @@ func (h *AlertScaleHandler) approveAlertScale(responseWriter ResponseWriter, w h
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
 	// Set approval decision - controller will detect and process
-	alertScale.Annotations["ops.udesk.cn/approval-decision"] = "approve"
-	alertScale.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
-	alertScale.Annotations["ops.udesk.cn/approval-operator"] = req.Approver
-	alertScale.Annotations["ops.udesk.cn/approval-reason"] = req.Reason
+	alertScale.Annotations[constants.ApprovalDecisionAnnotation] = "approve"
+	alertScale.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
+	alertScale.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
+	alertScale.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
 	if req.Comment != "" {
-		alertScale.Annotations["ops.udesk.cn/approval-comment"] = req.Comment
+		alertScale.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
 	}
-	alertScale.Annotations["ops.udesk.cn/approval-processing"] = approvalProcessingPending
+	alertScale.Annotations[constants.ApprovalProcessingAnnotation] = approvalProcessingPending
 
 	// Single atomic update - no status changes, no retries needed
 	if err := h.client.Update(ctx, &alertScale); err != nil {
@@ -266,14 +267,14 @@ func (h *AlertScaleHandler) rejectAlertScale(responseWriter ResponseWriter, w ht
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
 	// Set rejection decision - controller will detect and process
-	alertScale.Annotations["ops.udesk.cn/approval-decision"] = "reject"
-	alertScale.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
-	alertScale.Annotations["ops.udesk.cn/approval-operator"] = req.Approver
-	alertScale.Annotations["ops.udesk.cn/approval-reason"] = req.Reason
+	alertScale.Annotations[constants.ApprovalDecisionAnnotation] = "reject"
+	alertScale.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
+	alertScale.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
+	alertScale.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
 	if req.Comment != "" {
-		alertScale.Annotations["ops.udesk.cn/approval-comment"] = req.Comment
+		alertScale.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
 	}
-	alertScale.Annotations["ops.udesk.cn/approval-processing"] = approvalProcessingPending
+	alertScale.Annotations[constants.ApprovalProcessingAnnotation] = approvalProcessingPending
 
 	// Single atomic update - no status changes, no retries needed
 	if err := h.client.Update(ctx, &alertScale); err != nil {

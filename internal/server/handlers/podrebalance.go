@@ -11,6 +11,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/constants"
 	"udesk.cn/ops/internal/types"
 )
 
@@ -312,14 +313,14 @@ func (h *PodRebalanceHandler) handleApprovalAction(w http.ResponseWriter, r *htt
 	if podRebalance.Annotations == nil {
 		podRebalance.Annotations = make(map[string]string)
 	}
-	podRebalance.Annotations["ops.udesk.cn/approval-decision"] = action
-	podRebalance.Annotations["ops.udesk.cn/approval-timestamp"] = timestamp
-	podRebalance.Annotations["ops.udesk.cn/approval-operator"] = req.Approver
-	podRebalance.Annotations["ops.udesk.cn/approval-reason"] = req.Reason
+	podRebalance.Annotations[constants.ApprovalDecisionAnnotation] = action
+	podRebalance.Annotations[constants.ApprovalTimestampAnnotation] = timestamp
+	podRebalance.Annotations[constants.ApprovalOperatorAnnotation] = req.Approver
+	podRebalance.Annotations[constants.ApprovalReasonAnnotation] = req.Reason
 	if req.Comment != "" {
-		podRebalance.Annotations["ops.udesk.cn/approval-comment"] = req.Comment
+		podRebalance.Annotations[constants.ApprovalCommentAnnotation] = req.Comment
 	}
-	podRebalance.Annotations["ops.udesk.cn/approval-processing"] = ApprovalProcessingPending
+	podRebalance.Annotations[constants.ApprovalProcessingAnnotation] = ApprovalProcessingPending
 
 	if err := h.client.Update(ctx, &podRebalance); err != nil {
 		log.Error(err, "Failed to update PodRebalance with approval decision", "action", action)

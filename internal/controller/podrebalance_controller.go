@@ -29,6 +29,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/constants"
 	"udesk.cn/ops/internal/server/handlers"
 )
 
@@ -171,10 +172,10 @@ func (r *PodRebalanceReconciler) handleApprovaling(ctx context.Context, podRebal
 		if podRebalance.Annotations == nil {
 			podRebalance.Annotations = make(map[string]string)
 		}
-		podRebalance.Annotations["ops.udesk.cn/approval-decision"] = "approve"
-		podRebalance.Annotations["ops.udesk.cn/approval-operator"] = "system"
-		podRebalance.Annotations["ops.udesk.cn/approval-timestamp"] = metav1.Now().Format(time.RFC3339)
-		podRebalance.Annotations["ops.udesk.cn/approval-reason"] = "auto-approval"
+		podRebalance.Annotations[constants.ApprovalDecisionAnnotation] = constants.ApprovalDecisionApprove
+		podRebalance.Annotations[constants.ApprovalOperatorAnnotation] = constants.ApprovalDefaultUser
+		podRebalance.Annotations[constants.ApprovalTimestampAnnotation] = metav1.Now().Format(time.RFC3339)
+		podRebalance.Annotations[constants.ApprovalReasonAnnotation] = constants.ApprovalReasonAutoApproved
 
 		if err := r.Update(ctx, podRebalance); err != nil {
 			log.Error(err, "failed to set auto-approval annotations")
@@ -196,9 +197,9 @@ func (r *PodRebalanceReconciler) handleApprovaling(ctx context.Context, podRebal
 	// 检查是否有外部审批决策
 	annotations := podRebalance.GetAnnotations()
 	if annotations != nil {
-		decision, exists := annotations["ops.udesk.cn/approval-decision"]
+		decision, exists := annotations[constants.ApprovalDecisionAnnotation]
 		if exists {
-			processing := annotations["ops.udesk.cn/approval-processing"]
+			processing := annotations[constants.ApprovalProcessingAnnotation]
 			if processing == handlers.ApprovalProcessingPending {
 				// 审批决策还在处理中，等待
 				return ctrl.Result{RequeueAfter: time.Second * 10}, nil
@@ -208,27 +209,27 @@ func (r *PodRebalanceReconciler) handleApprovaling(ctx context.Context, podRebal
 			case "approve":
 				// 批准
 				podRebalance.Status.Status = StatusApproved
-				podRebalance.Status.Message = "Approved by " + annotations["ops.udesk.cn/approval-operator"]
+				podRebalance.Status.Message = "Approved by " + annotations[constants.ApprovalOperatorAnnotation]
 
 				if err := r.Status().Update(ctx, podRebalance); err != nil {
 					log.Error(err, "failed to update PodRebalance status to Approved")
 					return ctrl.Result{}, err
 				}
 
-				log.Info("PodRebalance approved", "name", podRebalance.Name, "operator", annotations["ops.udesk.cn/approval-operator"])
+				log.Info("PodRebalance approved", "name", podRebalance.Name, "operator", annotations[constants.ApprovalOperatorAnnotation])
 				return ctrl.Result{}, nil
 
 			case "reject":
 				// 拒绝
 				podRebalance.Status.Status = StatusRejected
-				podRebalance.Status.Message = "Rejected by " + annotations["ops.udesk.cn/approval-operator"]
+				podRebalance.Status.Message = "Rejected by " + annotations[constants.ApprovalOperatorAnnotation]
 
 				if err := r.Status().Update(ctx, podRebalance); err != nil {
 					log.Error(err, "failed to update PodRebalance status to Rejected")
 					return ctrl.Result{}, err
 				}
 
-				log.Info("PodRebalance rejected", "name", podRebalance.Name, "operator", annotations["ops.udesk.cn/approval-operator"])
+				log.Info("PodRebalance rejected", "name", podRebalance.Name, "operator", annotations[constants.ApprovalOperatorAnnotation])
 				return ctrl.Result{}, nil
 			}
 		}

@@ -7,6 +7,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
+	"udesk.cn/ops/internal/constants"
 	"udesk.cn/ops/internal/types"
 )
 
@@ -68,12 +69,12 @@ func (h *ApprovalingHandler) Handle(ctx *types.ScaleContext) (ctrl.Result, error
 func (h *ApprovalingHandler) processAPIApproval(ctx *types.ScaleContext) (*ctrl.Result, error) {
 	log := logf.FromContext(ctx.Context)
 
-	decision, exists := ctx.AlertScale.Annotations["ops.udesk.cn/approval-decision"]
+	decision, exists := ctx.AlertScale.Annotations[constants.ApprovalDecisionAnnotation]
 	if !exists {
 		return nil, nil
 	}
 
-	processing := ctx.AlertScale.Annotations["ops.udesk.cn/approval-processing"]
+	processing := ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation]
 	if processing != "pending" {
 		return nil, nil
 	}
@@ -159,7 +160,7 @@ func (h *ApprovalingHandler) markApprovalCompleted(ctx *types.ScaleContext) erro
 	if ctx.AlertScale.Annotations == nil {
 		ctx.AlertScale.Annotations = make(map[string]string)
 	}
-	ctx.AlertScale.Annotations["ops.udesk.cn/approval-processing"] = "completed"
+	ctx.AlertScale.Annotations[constants.ApprovalProcessingAnnotation] = "completed"
 	return ctx.Client.Update(ctx.Context, ctx.AlertScale)
 }
 
