@@ -1,4 +1,4 @@
-package v1beta1
+package constants
 
 // 审批流相关的注解常量 - 供所有CRD复用
 const (
