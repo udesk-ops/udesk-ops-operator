@@ -5,6 +5,7 @@ resources:
 - bases/ops.udesk.cn_alertscales.yaml
 - bases/ops.udesk.cn_scalenotifyconfigs.yaml
 - bases/ops.udesk.cn_scalenotifymsgtemplates.yaml
+- bases/ops.udesk.cn_podrebalances.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

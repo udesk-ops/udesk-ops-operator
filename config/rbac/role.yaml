@@ -26,6 +26,7 @@ rules:
   - ops.udesk.cn
   resources:
   - alertscales
+  - podrebalances
   - scalenotifyconfigs
   - scalenotifymsgtemplates
   verbs:
@@ -40,6 +41,7 @@ rules:
   - ops.udesk.cn
   resources:
   - alertscales/finalizers
+  - podrebalances/finalizers
   - scalenotifyconfigs/finalizers
   - scalenotifymsgtemplates/finalizers
   verbs:
@@ -48,6 +50,7 @@ rules:
   - ops.udesk.cn
   resources:
   - alertscales/status
+  - podrebalances/status
   - scalenotifyconfigs/status
   - scalenotifymsgtemplates/status
   verbs:
