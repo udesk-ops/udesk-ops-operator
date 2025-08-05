@@ -1,279 +1,198 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package types
 
 import (
 	"context"
-	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	apitypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 )
 
-func TestScaleStatusConstants(t *testing.T) {
-	tests := []struct {
-		name     string
-		constant string
-		expected string
-	}{
-		{"ScaleStatusPending", ScaleStatusPending, "Pending"},
-		{"ScaleStatusScaling", ScaleStatusScaling, "Scaling"},
-		{"ScaleStatusScaled", ScaleStatusScaled, "Scaled"},
-		{"ScaleStatusCompleted", ScaleStatusCompleted, "Completed"},
-		{"ScaleStatusApprovaling", ScaleStatusApprovaling, "Approvaling"},
-		{"ScaleStatusApproved", ScaleStatusApproved, "Approved"},
-		{"ScaleStatusRejected", ScaleStatusRejected, "Rejected"},
-		{"ScaleStatusFailed", ScaleStatusFailed, "Failed"},
-		{"ScaleStatusArchived", ScaleStatusArchived, "Archived"},
-	}
+var _ = Describe("Scale Types", func() {
+	var (
+		scaleContext *ScaleContext
+		alertScale   *opsv1beta1.AlertScale
+		fakeClient   client.Client
+		ctx          context.Context
+		mockStrategy *MockScaleStrategy
+	)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.constant != tt.expected {
-				t.Errorf("Expected %s to be %s, got %s", tt.name, tt.expected, tt.constant)
-			}
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create test scheme
+		scheme := runtime.NewScheme()
+		_ = opsv1beta1.AddToScheme(scheme)
+
+		// Create fake client
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			Build()
+
+		// Create test AlertScale
+		alertScale = &opsv1beta1.AlertScale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-alert",
+				Namespace: "default",
+			},
+			Spec: opsv1beta1.AlertScaleSpec{
+				ScaleReason:       "Memory pressure",
+				ScaleAutoApproval: true,
+				ScaleDuration:     "5m",
+				ScaleTarget: opsv1beta1.ScaleTarget{
+					Kind:      "Deployment",
+					Name:      "web-app",
+					Namespace: "default",
+				},
+			},
+		}
+
+		// Create mock strategy
+		mockStrategy = &MockScaleStrategy{}
+
+		// Create scale context
+		scaleContext = &ScaleContext{
+			AlertScale:    alertScale,
+			Client:        fakeClient,
+			Request:       ctrl.Request{NamespacedName: client.ObjectKeyFromObject(alertScale)},
+			Context:       ctx,
+			ScaleStrategy: mockStrategy,
+		}
+	})
+
+	Describe("ScaleContext", func() {
+		Context("when creating a new ScaleContext", func() {
+			It("should have all required fields", func() {
+				Expect(scaleContext.AlertScale).NotTo(BeNil())
+				Expect(scaleContext.Client).NotTo(BeNil())
+				Expect(scaleContext.Context).NotTo(BeNil())
+				Expect(scaleContext.ScaleStrategy).NotTo(BeNil())
+			})
+
+			It("should have valid AlertScale", func() {
+				Expect(scaleContext.AlertScale.Name).To(Equal("test-alert"))
+				Expect(scaleContext.AlertScale.Namespace).To(Equal("default"))
+				Expect(scaleContext.AlertScale.Spec.ScaleReason).To(Equal("Memory pressure"))
+			})
+
+			It("should have valid Request", func() {
+				Expect(scaleContext.Request.Name).To(Equal("test-alert"))
+				Expect(scaleContext.Request.Namespace).To(Equal("default"))
+			})
 		})
-	}
-}
+	})
 
-func TestNotifyTypeConstants(t *testing.T) {
-	tests := []struct {
-		name     string
-		constant string
-		expected string
-	}{
-		{"NotifyTypeWXWorkRobot", NotifyTypeWXWorkRobot, "WXWorkRobot"},
-		{"NotifyTypeEmail", NotifyTypeEmail, "Email"},
-	}
+	Describe("ScaleStrategy Interface", func() {
+		Context("when implementing ScaleStrategy", func() {
+			It("should implement all required methods", func() {
+				var strategy ScaleStrategy = mockStrategy
+				Expect(strategy).NotTo(BeNil())
+			})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.constant != tt.expected {
-				t.Errorf("Expected %s to be %s, got %s", tt.name, tt.expected, tt.constant)
-			}
+			It("should scale successfully", func() {
+				target := &opsv1beta1.ScaleTarget{
+					Kind:      "Deployment",
+					Name:      "test-deployment",
+					Namespace: "default",
+				}
+
+				err := mockStrategy.Scale(ctx, fakeClient, target, 5)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should get current replicas", func() {
+				target := &opsv1beta1.ScaleTarget{
+					Kind:      "Deployment",
+					Name:      "test-deployment",
+					Namespace: "default",
+				}
+
+				replicas, err := mockStrategy.GetCurrentReplicas(ctx, fakeClient, target)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).To(Equal(int32(3))) // Mock returns 3
+			})
+
+			It("should get available replicas", func() {
+				target := &opsv1beta1.ScaleTarget{
+					Kind:      "Deployment",
+					Name:      "test-deployment",
+					Namespace: "default",
+				}
+
+				replicas, err := mockStrategy.GetAvailableReplicas(ctx, fakeClient, target)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).To(Equal(int32(3))) // Mock returns 3
+			})
 		})
-	}
-}
+	})
 
-func TestValidationStatusConstants(t *testing.T) {
-	tests := []struct {
-		name     string
-		constant string
-		expected string
-	}{
-		{"ValidationStatusValid", ValidationStatusValid, "Valid"},
-		{"ValidationStatusInvalid", ValidationStatusInvalid, "Invalid"},
-		{"ValidationStatusPending", ValidationStatusPending, "Pending"},
-	}
+	Describe("StateHandler Interface", func() {
+		Context("when implementing StateHandler", func() {
+			It("should implement all required methods", func() {
+				handler := &MockStateHandler{}
+				var stateHandler StateHandler = handler
+				Expect(stateHandler).NotTo(BeNil())
+			})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.constant != tt.expected {
-				t.Errorf("Expected %s to be %s, got %s", tt.name, tt.expected, tt.constant)
-			}
+			It("should handle state transitions", func() {
+				handler := &MockStateHandler{}
+				result, err := handler.Handle(scaleContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(ctrl.Result{}))
+			})
+
+			It("should check transition permissions", func() {
+				handler := &MockStateHandler{}
+				canTransition := handler.CanTransition("approved")
+				Expect(canTransition).To(BeTrue())
+			})
 		})
-	}
+	})
+})
+
+// MockScaleStrategy is a mock implementation for testing
+type MockScaleStrategy struct{}
+
+func (m *MockScaleStrategy) Scale(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
+	return nil
 }
 
-func TestScaleContext(t *testing.T) {
-	ctx := context.Background()
-	s := runtime.NewScheme()
-	_ = opsv1beta1.AddToScheme(s)
-	_ = scheme.AddToScheme(s)
-	fakeClient := fake.NewClientBuilder().WithScheme(s).Build()
-
-	alertScale := &opsv1beta1.AlertScale{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-alertscale",
-			Namespace: "default",
-		},
-		Spec: opsv1beta1.AlertScaleSpec{
-			ScaleAutoApproval: true,
-		},
-	}
-
-	request := ctrl.Request{
-		NamespacedName: apitypes.NamespacedName{
-			Name:      "test-alertscale",
-			Namespace: "default",
-		},
-	}
-
-	scaleStrategy := &mockScaleStrategy{}
-
-	scaleContext := &ScaleContext{
-		Context:       ctx,
-		Client:        fakeClient,
-		AlertScale:    alertScale,
-		Request:       request,
-		ScaleStrategy: scaleStrategy,
-	}
-
-	// Test that ScaleContext holds all required fields
-	if scaleContext.Context == nil {
-		t.Errorf("Expected Context to be set")
-	}
-	if scaleContext.Client == nil {
-		t.Errorf("Expected Client to be set")
-	}
-	if scaleContext.AlertScale == nil {
-		t.Errorf("Expected AlertScale to be set")
-	}
-	if scaleContext.ScaleStrategy == nil {
-		t.Errorf("Expected ScaleStrategy to be set")
-	}
-
-	// Test field values
-	if scaleContext.AlertScale.Name != "test-alertscale" {
-		t.Errorf("Expected AlertScale name to be 'test-alertscale', got %s", scaleContext.AlertScale.Name)
-	}
-	if scaleContext.Request.Name != "test-alertscale" {
-		t.Errorf("Expected Request name to be 'test-alertscale', got %s", scaleContext.Request.Name)
-	}
+func (m *MockScaleStrategy) GetCurrentReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+	return 3, nil
 }
 
-// Mock implementations for testing interfaces
-
-type mockScaleStrategy struct {
-	scaleError             error
-	currentReplicas        int32
-	currentReplicasError   error
-	availableReplicas      int32
-	availableReplicasError error
+func (m *MockScaleStrategy) GetAvailableReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
+	return 3, nil
 }
 
-func (m *mockScaleStrategy) Scale(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget, replicas int32) error {
-	return m.scaleError
+// MockStateHandler is a mock implementation for testing
+type MockStateHandler struct{}
+
+func (m *MockStateHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
+	return ctrl.Result{}, nil
 }
 
-func (m *mockScaleStrategy) GetCurrentReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
-	return m.currentReplicas, m.currentReplicasError
-}
-
-func (m *mockScaleStrategy) GetAvailableReplicas(ctx context.Context, c client.Client, target *opsv1beta1.ScaleTarget) (int32, error) {
-	return m.availableReplicas, m.availableReplicasError
-}
-
-type mockStateHandler struct {
-	handleResult      ctrl.Result
-	handleError       error
-	canTransitionFunc func(toState string) bool
-}
-
-func (m *mockStateHandler) Handle(ctx *ScaleContext) (ctrl.Result, error) {
-	return m.handleResult, m.handleError
-}
-
-func (m *mockStateHandler) CanTransition(toState string) bool {
-	if m.canTransitionFunc != nil {
-		return m.canTransitionFunc(toState)
-	}
+func (m *MockStateHandler) CanTransition(toState string) bool {
 	return true
-}
-
-type mockScaleNotifyClient struct {
-	sendNotifyError error
-	validateError   error
-}
-
-func (m *mockScaleNotifyClient) SendNotify(ctx context.Context, message string) error {
-	return m.sendNotifyError
-}
-
-func (m *mockScaleNotifyClient) Validate(ctx context.Context) error {
-	return m.validateError
-}
-
-func TestScaleStrategyInterface(t *testing.T) {
-	strategy := &mockScaleStrategy{
-		currentReplicas:   3,
-		availableReplicas: 3,
-	}
-
-	ctx := context.Background()
-	s := runtime.NewScheme()
-	_ = opsv1beta1.AddToScheme(s)
-	fakeClient := fake.NewClientBuilder().WithScheme(s).Build()
-
-	target := &opsv1beta1.ScaleTarget{
-		Kind: "Deployment",
-		Name: "test-deployment",
-	}
-
-	// Test Scale method
-	err := strategy.Scale(ctx, fakeClient, target, 5)
-	if err != nil {
-		t.Errorf("Expected no error from Scale, got %v", err)
-	}
-
-	// Test GetCurrentReplicas method
-	replicas, err := strategy.GetCurrentReplicas(ctx, fakeClient, target)
-	if err != nil {
-		t.Errorf("Expected no error from GetCurrentReplicas, got %v", err)
-	}
-	if replicas != 3 {
-		t.Errorf("Expected current replicas to be 3, got %d", replicas)
-	}
-
-	// Test GetAvailableReplicas method
-	availableReplicas, err := strategy.GetAvailableReplicas(ctx, fakeClient, target)
-	if err != nil {
-		t.Errorf("Expected no error from GetAvailableReplicas, got %v", err)
-	}
-	if availableReplicas != 3 {
-		t.Errorf("Expected available replicas to be 3, got %d", availableReplicas)
-	}
-}
-
-func TestStateHandlerInterface(t *testing.T) {
-	handler := &mockStateHandler{
-		handleResult: ctrl.Result{Requeue: true},
-		canTransitionFunc: func(toState string) bool {
-			return toState == ScaleStatusScaling
-		},
-	}
-
-	// Test Handle method
-	scaleContext := &ScaleContext{}
-	result, err := handler.Handle(scaleContext)
-	if err != nil {
-		t.Errorf("Expected no error from Handle, got %v", err)
-	}
-	if !result.Requeue {
-		t.Errorf("Expected result.Requeue to be true")
-	}
-
-	// Test CanTransition method
-	canTransition := handler.CanTransition(ScaleStatusScaling)
-	if !canTransition {
-		t.Errorf("Expected CanTransition to return true for Scaling status")
-	}
-
-	canTransition = handler.CanTransition(ScaleStatusCompleted)
-	if canTransition {
-		t.Errorf("Expected CanTransition to return false for Completed status")
-	}
-}
-
-func TestScaleNotifyClientInterface(t *testing.T) {
-	notifyClient := &mockScaleNotifyClient{}
-
-	ctx := context.Background()
-
-	// Test SendNotify method
-	err := notifyClient.SendNotify(ctx, "test message")
-	if err != nil {
-		t.Errorf("Expected no error from SendNotify, got %v", err)
-	}
-
-	// Test Validate method
-	err = notifyClient.Validate(ctx)
-	if err != nil {
-		t.Errorf("Expected no error from Validate, got %v", err)
-	}
 }

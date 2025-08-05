@@ -1,0 +1,9 @@
+apiVersion: ops.udesk.cn/v1beta1
+kind: PodRebalance
+metadata:
+  labels:
+    app.kubernetes.io/name: udesk-ops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: podrebalance-sample
+spec:
+  # TODO(user): Add fields here

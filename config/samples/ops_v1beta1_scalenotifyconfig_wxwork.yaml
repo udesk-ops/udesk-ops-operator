@@ -11,6 +11,5 @@ spec:
   type: WXWorkRobot
   config:
     webhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=9911e070-e548-4fb8-aad6-f3a43fe1da15"
-    messageTemplate: "🚨 AlertScale 通知\n\n{{.Message}}\n\n时间: {{.Time}}"
     atUsers: ["user1", "user2"]
-    atAll: false
+    atAll: true

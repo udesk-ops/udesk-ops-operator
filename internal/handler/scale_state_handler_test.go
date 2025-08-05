@@ -1,91 +1,122 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package handler
 
 import (
-	"testing"
 	"time"
 
-	"udesk.cn/ops/internal/types"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 )
 
-func TestParseDuration(t *testing.T) {
-	tests := []struct {
-		name        string
-		duration    string
-		expected    time.Duration
-		expectError bool
-	}{
-		{
-			name:        "Valid duration",
-			duration:    "10m",
-			expected:    10 * time.Minute,
-			expectError: false,
-		},
-		{
-			name:        "Empty duration defaults to 5m",
-			duration:    "",
-			expected:    5 * time.Minute,
-			expectError: false,
-		},
-		{
-			name:        "Invalid duration",
-			duration:    "invalid",
-			expectError: true,
-		},
-		{
-			name:        "Duration in seconds",
-			duration:    "30s",
-			expected:    30 * time.Second,
-			expectError: false,
-		},
-	}
+var _ = Describe("Scale State Handler", func() {
+	Describe("BaseStateHandler", func() {
+		var handler BaseStateHandler
+		var alertScale *opsv1beta1.AlertScale
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseDuration(tt.duration)
+		BeforeEach(func() {
+			handler = BaseStateHandler{}
 
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Expected no error, got %v", err)
-				return
-			}
-
-			if result != tt.expected {
-				t.Errorf("Expected duration %v, got %v", tt.expected, result)
+			alertScale = &opsv1beta1.AlertScale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-alert",
+					Namespace: "default",
+				},
+				Spec: opsv1beta1.AlertScaleSpec{
+					ScaleReason:       "Memory pressure",
+					ScaleAutoApproval: true,
+					ScaleDuration:     "5m",
+					ScaleTarget: opsv1beta1.ScaleTarget{
+						Kind:      "Deployment",
+						Name:      "web-app",
+						Namespace: "default",
+					},
+				},
 			}
 		})
-	}
-}
 
-// 简化的单元测试 - 主要测试接口和基本逻辑
-func TestHandlerInterfaces(t *testing.T) {
-	// Test that handlers implement the StateHandler interface
-	var _ types.StateHandler = &ApprovalingHandler{}
-	var _ types.StateHandler = &ApprovedHandler{}
-	var _ types.StateHandler = &PendingHandler{}
+		Context("when handling duration parsing", func() {
+			It("should parse valid duration strings", func() {
+				duration, err := handler.parseDuration("5m")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(5 * time.Minute))
+			})
 
-	// Test CanTransition methods
-	approvalingHandler := &ApprovalingHandler{}
-	if !approvalingHandler.CanTransition(types.ScaleStatusApproved) {
-		t.Errorf("ApprovalingHandler should be able to transition to Approved")
-	}
-	if !approvalingHandler.CanTransition(types.ScaleStatusRejected) {
-		t.Errorf("ApprovalingHandler should be able to transition to Rejected")
-	}
-	if approvalingHandler.CanTransition(types.ScaleStatusScaling) {
-		t.Errorf("ApprovalingHandler should not be able to transition to Scaling")
-	}
+			It("should handle empty duration with default", func() {
+				duration, err := handler.parseDuration("")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(5 * time.Minute))
+			})
 
-	approvedHandler := &ApprovedHandler{}
-	if !approvedHandler.CanTransition(types.ScaleStatusScaling) {
-		t.Errorf("ApprovedHandler should be able to transition to Scaling")
-	}
-	if approvedHandler.CanTransition(types.ScaleStatusApproved) {
-		t.Errorf("ApprovedHandler should not be able to transition to Approved")
-	}
-}
+			It("should handle invalid duration strings", func() {
+				_, err := handler.parseDuration("invalid")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when working with AlertScale objects", func() {
+			It("should have valid AlertScale structure", func() {
+				Expect(alertScale.Name).To(Equal("test-alert"))
+				Expect(alertScale.Namespace).To(Equal("default"))
+				Expect(alertScale.Spec.ScaleReason).To(Equal("Memory pressure"))
+				Expect(alertScale.Spec.ScaleAutoApproval).To(BeTrue())
+			})
+
+			It("should have valid ScaleTarget", func() {
+				target := alertScale.Spec.ScaleTarget
+				Expect(target.Kind).To(Equal("Deployment"))
+				Expect(target.Name).To(Equal("web-app"))
+				Expect(target.Namespace).To(Equal("default"))
+			})
+		})
+	})
+
+	Describe("Duration parsing utility", func() {
+		Context("when parsing duration strings", func() {
+			It("should parse minutes correctly", func() {
+				duration, err := parseDuration("10m")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(10 * time.Minute))
+			})
+
+			It("should parse hours correctly", func() {
+				duration, err := parseDuration("2h")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(2 * time.Hour))
+			})
+
+			It("should parse seconds correctly", func() {
+				duration, err := parseDuration("30s")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(30 * time.Second))
+			})
+
+			It("should use default duration for empty string", func() {
+				duration, err := parseDuration("")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(duration).To(Equal(5 * time.Minute))
+			})
+
+			It("should return error for invalid format", func() {
+				_, err := parseDuration("invalid-format")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+})

@@ -1,0 +1,26 @@
+apiVersion: ops.udesk.cn/v1beta1
+kind: ScaleNotifyMsgTemplate
+metadata:
+  labels:
+    app.kubernetes.io/name: udesk-ops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: default-scale-template
+spec:
+  title: "扩缩容通知 - {{.ScaleTarget.Name}}"
+  content: |
+    **扩缩容操作通知**
+    
+    **目标资源:** {{.ScaleTarget.Kind}}/{{.ScaleTarget.Name}}
+    **命名空间:** {{.ScaleTarget.Namespace}}
+    **操作原因:** {{.ScaleReason}}
+    **阈值:** {{.ScaleThreshold}}%
+    **原始副本数:** {{.OriginReplicas}}
+    **目标副本数:** {{.ScaledReplicas}}
+    **持续时间:** {{.ScaleDuration}}
+    **状态:** {{.Status}}
+    **开始时间:** {{.ScaleBeginTime}}
+    {{- if .ScaleEndTime}}
+    **结束时间:** {{.ScaleEndTime}}
+    {{- end}}
+    
+    请及时关注系统状态！

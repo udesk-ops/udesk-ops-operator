@@ -26,7 +26,9 @@ rules:
   - ops.udesk.cn
   resources:
   - alertscales
+  - podrebalances
   - scalenotifyconfigs
+  - scalenotifymsgtemplates
   verbs:
   - create
   - delete
@@ -39,14 +41,18 @@ rules:
   - ops.udesk.cn
   resources:
   - alertscales/finalizers
+  - podrebalances/finalizers
   - scalenotifyconfigs/finalizers
+  - scalenotifymsgtemplates/finalizers
   verbs:
   - update
 - apiGroups:
   - ops.udesk.cn
   resources:
   - alertscales/status
+  - podrebalances/status
   - scalenotifyconfigs/status
+  - scalenotifymsgtemplates/status
   verbs:
   - get
   - patch

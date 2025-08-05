@@ -39,6 +39,7 @@ import (
 
 	opsv1beta1 "udesk.cn/ops/api/v1beta1"
 	"udesk.cn/ops/internal/controller"
+	server "udesk.cn/ops/internal/server"
 	webhookv1beta1 "udesk.cn/ops/internal/webhook/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -64,6 +65,8 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableAPIServer bool
+	var apiAddr string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -82,6 +85,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableAPIServer, "enable-api-server", true,
+		"If set, the API server will be enabled for external access")
+	flag.StringVar(&apiAddr, "api-addr", ":8088",
+		"The address the API server binds to.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -210,6 +217,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AlertScale")
 		os.Exit(1)
 	}
+	if err := (&controller.PodRebalanceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PodRebalance")
+		os.Exit(1)
+	}
 	if err := (&controller.ScaleNotifyConfigReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -247,6 +261,20 @@ func main() {
 	} else {
 		setupLog.Info("Webhooks disabled by ENABLE_WEBHOOKS environment variable")
 	}
+	if err := (&controller.ScaleNotifyMsgTemplateReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScaleNotifyMsgTemplate")
+		os.Exit(1)
+	}
+	if err := (&controller.PodRebalanceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PodRebalance")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
@@ -274,8 +302,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup signal handler that will be shared
+	ctx := ctrl.SetupSignalHandler()
+
+	// Start API server if enabled
+	if enableAPIServer {
+		setupLog.Info("Starting API server", "address", apiAddr)
+		apiServer := server.NewAPIServer(mgr.GetClient(), apiAddr)
+
+		// Start API server in a goroutine with shared context
+		go func() {
+			if err := apiServer.Start(ctx); err != nil {
+				setupLog.Error(err, "problem running API server")
+			}
+		}()
+	}
+
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
